@@ -1,40 +1,57 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq.Expressions;
 using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
 
 using episource.unblocker.hosting;
+using episource.unblocker.tasks;
 
 namespace episource.unblocker {
     public sealed class Unblocker : IDisposable {
-        private static readonly TimeSpan CleanupDelay = TimeSpan.FromMilliseconds(250);
+        private static readonly TimeSpan DefaultCleanupDelay = TimeSpan.FromMilliseconds(150);
+        private static readonly TimeSpan DefaultStandbyDelay = TimeSpan.FromMilliseconds(10000);
         
         private readonly object stateLock = new object();
         private readonly int maxIdleWorkers;
         private readonly Queue<WorkerClient> idleClients = new Queue<WorkerClient>();
         private readonly LinkedList<WorkerClient> busyClients = new LinkedList<WorkerClient>();
         private readonly DebugMode debugMode;
+        private readonly CountdownTask cleanupTask;
+        private readonly CountdownTask standbyTask;
 
-        private bool disposed;
+        private volatile bool disposed;
 
-        public Unblocker(int maxIdleWorkers = 1, DebugMode debug = DebugMode.None) {
+        public Unblocker(
+            int maxIdleWorkers = 1, DebugMode debug = DebugMode.None,
+            TimeSpan? cleanupDelay = null, TimeSpan? standbyDelay = null
+        ) {
             this.maxIdleWorkers = maxIdleWorkers;
             this.debugMode = debug;
+            
+            this.cleanupTask = new CountdownTask(cleanupDelay ?? DefaultCleanupDelay, this.Cleanup);
+            this.standbyTask = new CountdownTask(standbyDelay ?? DefaultStandbyDelay, this.Standby);
         }
         
         public async Task<T> InvokeAsync<T>(
             Expression<Func<CancellationToken, T>> invocation, CancellationToken ct = new CancellationToken(),
             TimeSpan? cancellationTimeout = null, SecurityZone securityZone = SecurityZone.MyComputer
         ) {
+            if (this.disposed) {
+                throw new ObjectDisposedException("This instance has been disposed.");
+            }
+            
             try {
+                this.cleanupTask.Cancel();
+                this.standbyTask.Cancel();
+                
                 return await this.ActivateWorker()
                                        .InvokeRemotely(invocation, ct, cancellationTimeout, securityZone)
                                        .ConfigureAwait(false);
             } finally {
-                this.Cleanup();
+                // standbyTask started during cleanup
+                this.cleanupTask.Reset();
             }
             
         }
@@ -48,19 +65,33 @@ namespace episource.unblocker {
             }
 
             try {
+                this.cleanupTask.Cancel();
+                this.standbyTask.Cancel();
+                
                 await this.ActivateWorker().InvokeRemotely(invocation, ct, cancellationTimeout, securityZone);
             } finally {
-                this.Cleanup();
+                // standbyTask started during cleanup
+                this.cleanupTask.Reset();
             }
         }
 
         // releases all idle workers
         public void Standby() {
+            if (this.debugMode != DebugMode.None) {
+                Console.WriteLine("Standby started.");
+            }
+            
             lock (this.stateLock) {
+                this.RecoverWorkers();
+                
                 foreach (var client in this.idleClients) {
                     client.Dispose();
                 }
                 this.idleClients.Clear();
+
+                if (this.busyClients.Count > 0) {
+                    this.cleanupTask.TryStart();
+                }
             }
         }
 
@@ -81,10 +112,13 @@ namespace episource.unblocker {
             }
         }
 
-        private async void Cleanup() {
-            await Task.Delay(CleanupDelay).ConfigureAwait(false);
+        private void Cleanup() {
+            if (this.debugMode != DebugMode.None) {
+                Console.WriteLine("Cleanup started.");
+            }
             
             lock (this.stateLock) {
+                this.standbyTask.Reset();
                 this.RecoverWorkers();
                 this.EnsureWorkerLimit();
             }
@@ -135,6 +169,8 @@ namespace episource.unblocker {
                 }
             }
         }
+        
+        #region IDisposable
 
         public void Dispose() {
             this.Dispose(true);
@@ -157,5 +193,7 @@ namespace episource.unblocker {
                 }
             }
         }
+        
+        #endregion
     }
 }
