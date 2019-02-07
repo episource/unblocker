@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq.Expressions;
+using System.Runtime.CompilerServices;
 using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,7 +14,8 @@ namespace episource.unblocker {
     public sealed class Unblocker : IDisposable {
         private static readonly TimeSpan DefaultCleanupDelay = TimeSpan.FromMilliseconds(150);
         private static readonly TimeSpan DefaultStandbyDelay = TimeSpan.FromMilliseconds(10000);
-        
+
+        private readonly string id;
         private readonly object stateLock = new object();
         private readonly int maxIdleWorkers;
         private readonly Queue<WorkerClient> idleClients = new Queue<WorkerClient>();
@@ -27,6 +30,8 @@ namespace episource.unblocker {
             int maxIdleWorkers = 1, DebugMode debug = DebugMode.None,
             TimeSpan? cleanupDelay = null, TimeSpan? standbyDelay = null
         ) {
+            this.id = "[unblocker:" + this.GetHashCode() + "]";
+            
             this.maxIdleWorkers = maxIdleWorkers;
             this.debugMode = debug;
             
@@ -77,9 +82,8 @@ namespace episource.unblocker {
 
         // releases all idle workers
         public void Standby() {
-            if (this.debugMode != DebugMode.None) {
-                Console.WriteLine("Standby started.");
-            }
+            Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                "{0} Standby started.", this.id));
             
             lock (this.stateLock) {
                 this.RecoverWorkers();
@@ -93,6 +97,10 @@ namespace episource.unblocker {
                     this.cleanupTask.TryStart();
                 }
             }
+        }
+
+        public override string ToString() {
+            return this.id;
         }
 
         private WorkerClient ActivateWorker() {
@@ -114,7 +122,8 @@ namespace episource.unblocker {
 
         private void Cleanup() {
             if (this.debugMode != DebugMode.None) {
-                Console.WriteLine("Cleanup started.");
+                Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                    "{0} Cleanup started.", this.id));
             }
             
             lock (this.stateLock) {
@@ -142,7 +151,8 @@ namespace episource.unblocker {
                         case WorkerClient.State.Dying:
                         case WorkerClient.State.Dead:
                             if (this.debugMode != DebugMode.None) {
-                                Console.WriteLine("Disposing dying/dead worker: " + worker);
+                                Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                                    "{0} Disposing dying/dead worker: {1}", this.id, worker));
                             }
                             this.busyClients.Remove(curNode);
                             worker.Dispose();
@@ -162,7 +172,8 @@ namespace episource.unblocker {
                     var worker = this.idleClients.Dequeue();
                     
                     if (this.debugMode != DebugMode.None) {
-                        Console.WriteLine("Disposing surplus worker: " + worker);
+                        Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                            "{0} Disposing surplus worker: {1}", this.id, worker));
                     }
                     
                     worker.Dispose();

@@ -26,6 +26,7 @@ namespace episource.unblocker.hosting {
     
     public sealed partial class WorkerServer : MarshalByRefObject, IWorkerServer {
         private readonly object stateLock = new object();
+        private readonly string serverId = "[server:" + Process.GetCurrentProcess().Id + "]";
         private readonly ClientSponsor proxyLifetimeSponsor = new ClientSponsor();
         private volatile bool isReady = true;
         private volatile TaskRunner activeRunner;
@@ -120,8 +121,8 @@ namespace episource.unblocker.hosting {
                 if (runner != this.activeRunner) {
                     Console.WriteLine(string.Format(
                         CultureInfo.InvariantCulture,
-                        "runner ({0}) != this.activeRunner ({1})", 
-                        runner, this.activeRunner));
+                        "{0} runner ({1}) != this.activeRunner ({2})",
+                        serverId, runner, this.activeRunner));
                     return false;
                 }
 
@@ -148,13 +149,13 @@ namespace episource.unblocker.hosting {
                 }
 
                 if (!cleanShutdown) {
-                    Console.WriteLine("Failed to cancel task. Going to kill the task. Let's tell.");
+                    Console.WriteLine(serverId + " Failed to cancel task. Going to kill the task. Let's tell.");
                     this.TaskCanceledEvent(this, EventArgs.Empty);
                 }
                 
 
                 try {
-                    Console.WriteLine("Going to unload the task's AppDomain.");
+                    Console.WriteLine(serverId + " Going to unload the task's AppDomain.");
                     
                     this.activeRunner.NotifyUnload();
                     this.proxyLifetimeSponsor.Unregister(this.activeRunner);
@@ -163,27 +164,30 @@ namespace episource.unblocker.hosting {
                     AppDomain.Unload(this.activeRunnerDomain);
                     this.activeRunnerDomain = null;
                     
-                    Console.WriteLine("Done unloading the task's AppDomain.");
+                    Console.WriteLine(serverId + " Done unloading the task's AppDomain.");
 
                     this.isReady = true;
                     this.ServerReadyEvent(this, EventArgs.Empty);
                 } catch (CannotUnloadAppDomainException e) {
-                    this.ServerDyingEvent(this, EventArgs.Empty);
-                    
-                    Console.WriteLine("Failed to unload task's AppDomain: " + e.Message);
-                    Console.WriteLine(e.StackTrace);
-                    Console.WriteLine("Going to kill myself!");    
+                    Console.WriteLine(serverId + " Failed to unload task's AppDomain: " + e.Message);
+                    Console.WriteLine(serverId + " Going to kill myself!");
+
+                    this.ServerDyingEvent(this, EventArgs.Empty); 
                     
                     // kill current worker in the most robust way possible!
                     try {
                         Process.GetCurrentProcess().Kill();
                     } catch (Exception ee) {
-                        Console.WriteLine("Failed to commit suicide: " + ee.Message);
+                        Console.WriteLine(serverId + " Failed to commit suicide: " + ee.Message);
                         Console.WriteLine(ee.StackTrace);
-                        Console.WriteLine("Client will have to take care of that!");   
+                        Console.WriteLine(serverId + " Client will have to take care of that!");   
                     }
                 }
             }
+        }
+
+        public override string ToString() {
+            return this.serverId;
         }
 
         public void Dispose() {

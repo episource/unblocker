@@ -24,7 +24,8 @@ namespace episource.unblocker.hosting {
             if (this.Context.Parameters["debug"] == DebugMode.Debugger.ToString()) {
                 while (!Debugger.IsAttached) {
                     Debugger.Launch();
-                    Console.WriteLine("Waiting for debugger: " + Process.GetCurrentProcess().Id);
+                    Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                        "[server:{0}] Waiting for debugger", Process.GetCurrentProcess().Id));
                     Thread.Sleep(1000);
                 }
             }

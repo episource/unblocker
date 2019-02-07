@@ -23,6 +23,7 @@ namespace episource.unblocker.hosting {
 
         private readonly object stateLock = new object();
         private readonly ClientSponsor proxyLifetimeSponsor = new ClientSponsor();
+        private readonly string id;
         private readonly WorkerProcess process;
         private readonly IWorkerServer serverProxy;
         
@@ -31,6 +32,7 @@ namespace episource.unblocker.hosting {
 
         public WorkerClient(WorkerProcess process, IWorkerServer serverProxy) {
             this.process = process;
+            this.id = "[client:" + process.Id + "]";
             
             this.serverProxy = serverProxy;
             if (this.serverProxy is MarshalByRefObject) {
@@ -71,6 +73,10 @@ namespace episource.unblocker.hosting {
             await this.InvokeRemotely(request, ct, 
                           cancellationTimeout.GetValueOrDefault(DefaultCancellationTimeout), securityZone)
                       .ConfigureAwait(false);
+        }
+
+        public override string ToString() {
+            return this.id;
         }
 
         private Task<object> InvokeRemotely(
