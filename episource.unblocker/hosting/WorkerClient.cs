@@ -86,13 +86,32 @@ namespace episource.unblocker.hosting {
                     this.OnServerDying(this, EventArgs.Empty);
                     throw new InvalidOperationException("Worker process not alive / crashed.");
                 }
-
-                this.state = State.Busy;
+                
+                
                 this.activeTcs = new TaskCompletionSource<object>();
-                ct.Register(() => this.serverProxy.Cancel(cancellationTimeout));
+                
+                // this is the latest time to check whether the task has already been cancelled, before actually
+                // starting the task!
+                if (ct.IsCancellationRequested) {
+                    this.activeTcs.TrySetCanceled();
+                    this.activeTcs = null;
+                    return this.activeTcs.Task;
+                }
+                
+                this.state = State.Busy;
             }
 
+            ct.Register(() => this.serverProxy.Cancel(cancellationTimeout));
             this.serverProxy.InvokeAsync(request.ToPortableInvocationRequest(), securityZone);
+
+            // Calling Cancel(..) on the server is only handled if there's a invocation request being handled!
+            // there's the chance that task was canceled before it was actually started. It might have happened
+            // before registering the cancel callback, as well.
+            // At this point we now for sure, that the task has been started!
+            if (ct.IsCancellationRequested) {
+                this.serverProxy.Cancel(cancellationTimeout);
+            }
+            
             return this.activeTcs.Task;
         }
 

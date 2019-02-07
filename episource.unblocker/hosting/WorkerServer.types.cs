@@ -7,7 +7,7 @@ namespace episource.unblocker.hosting {
         // may be used for one invocation only!
         private sealed class TaskRunner : MarshalByRefObject {
             private readonly CancellationTokenSource cts = new CancellationTokenSource();
-            private volatile bool unloadScheduled = false;
+            private volatile bool unloadScheduled;
 
             public void Cancel() {
                 this.cts.Cancel();

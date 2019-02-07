@@ -28,8 +28,9 @@ namespace episource.unblocker.hosting {
         private readonly object stateLock = new object();
         private readonly ClientSponsor proxyLifetimeSponsor = new ClientSponsor();
         private volatile bool isReady = true;
-        private TaskRunner activeRunner;
-        private AppDomain activeRunnerDomain;
+        private volatile TaskRunner activeRunner;
+        private volatile AppDomain activeRunnerDomain;
+        private volatile Task cleanupTask;
 
         public event EventHandler TaskCanceledEvent;
 
@@ -44,11 +45,10 @@ namespace episource.unblocker.hosting {
         
         public void Cancel(TimeSpan cancelTimeout) {
             lock (this.stateLock) {
-                if (this.activeRunner != null) {
+                if (this.activeRunner != null && this.cleanupTask == null) {
                     this.activeRunner.Cancel();
+                    this.cleanupTask = this.EnsureCanceled(cancelTimeout);
                 }
-
-                this.EnsureCanceled(cancelTimeout);
             }
         }
         
@@ -81,7 +81,10 @@ namespace episource.unblocker.hosting {
                     typeof(TaskRunner).Assembly.Location, typeof(TaskRunner).FullName);
                 this.proxyLifetimeSponsor.Register(this.activeRunner);
             }
-
+            
+            // Note: The runner's Cancel(..) method might have been invoked before the task is actually started.
+            // However, this is OK. The runner is a oneshot thing. If it is canceled before it receives a invocation
+            // request, it goes to canceled state and won't even start the task.
             Task.Run(() => this.activeRunner.InvokeSynchronously(this, invocationRequest));
         }
 
@@ -126,14 +129,19 @@ namespace episource.unblocker.hosting {
             }
         }
 
-        private async void EnsureCanceled(TimeSpan cancelTimeout) {
+        private async Task EnsureCanceled(TimeSpan cancelTimeout) {
             await Task.Delay(cancelTimeout).ConfigureAwait(false);
             this.Cleanup(false);
         }
 
         // unload appdomain
         private void Cleanup(bool cleanShutdown) {
+            // lock might be kept for a very long time
+            // this is ok, as in this case, the worker isn't ready anyhow
             lock (this.stateLock) {
+                // cleanup task has executed!
+                this.cleanupTask = null;
+                
                 if (this.isReady) {
                     // nothing to cleanup - already clean
                     return;
