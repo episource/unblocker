@@ -116,7 +116,7 @@ namespace episource.unblocker {
         }
 
         private void OnWorkerCurrentStateChanged(object sender, WorkerStateChangedEventArgs args) {
-            if (args.State == WorkerClient.State.Idle || args.State == WorkerClient.State.Dying) {
+            if (args.State == WorkerClient.State.Idle || args.State == WorkerClient.State.Dead) {
                 this.Cleanup();
             }
         }
@@ -148,12 +148,12 @@ namespace episource.unblocker {
                             break;
                         case WorkerClient.State.Busy:
                         case WorkerClient.State.Cleanup:
-                            break;
                         case WorkerClient.State.Dying:
+                            break;
                         case WorkerClient.State.Dead:
                             if (this.debugMode != DebugMode.None) {
                                 Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                                    "{0} Disposing dying/dead worker: {1}", this.id, worker));
+                                    "{0} Disposing dead worker: {1}", this.id, worker));
                             }
                             this.busyClients.Remove(curNode);
                             
