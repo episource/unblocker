@@ -54,7 +54,7 @@ namespace episource.unblocker.hosting {
         private readonly ClientSponsor remoteProxySponsor = new ClientSponsor();
         private IWorkerServer remoteProxy;
         
-        public event EventHandler TaskCanceledEvent;
+        public event EventHandler<TaskCanceledEventArgs> TaskCanceledEvent;
         public event EventHandler<TaskSucceededEventArgs> TaskSucceededEvent;
         public event EventHandler<TaskFailedEventArgs> TaskFailedEvent;
         public event EventHandler ServerDyingEvent;
@@ -69,34 +69,28 @@ namespace episource.unblocker.hosting {
         }
 
         // must be public to be bindable to remote events
-        public void OnTaskCanceled(object sender, EventArgs e) {
-            var taskCanceledEvent = this.TaskCanceledEvent;
-            if (taskCanceledEvent != null) {
-                taskCanceledEvent(sender, e);
-            }
+        public void OnTaskCanceled(object sender, TaskCanceledEventArgs args) {
+            this.TaskCanceledEvent.InvokeEvent(e => e( sender, args));
         }
         
         // must be public to be bindable to remote events
-        public void OnTaskSucceeded(object sender, TaskSucceededEventArgs e) {
-            var taskSucceededEvent = this.TaskSucceededEvent;
-            if (taskSucceededEvent != null) {
-                taskSucceededEvent(sender, e);
-            }
+        public void OnTaskSucceeded(object sender, TaskSucceededEventArgs args) {
+            this.TaskSucceededEvent.InvokeEvent(e => e( sender, args));
         }
         
         // must be public to be bindable to remote events
-        public void OnTaskFailed(object sender, TaskFailedEventArgs e) {
-            this.TaskFailedEvent(sender, e);
+        public void OnTaskFailed(object sender, TaskFailedEventArgs args) {
+            this.TaskFailedEvent.InvokeEvent(e => e( sender, args));
         }
         
         // must be public to be bindable to remote events
-        public void OnServerDying(object sender, EventArgs e) {
-            this.ServerDyingEvent(sender, e);
+        public void OnServerDying(object sender, EventArgs args) {
+            this.ServerDyingEvent.InvokeEvent(e => e( sender, args));
         }
         
         // must be public to be bindable to remote events
-        public void OnServerReady(object sender, EventArgs e) {
-            this.ServerReadyEvent(sender, e);
+        public void OnServerReady(object sender, EventArgs args) {
+            this.ServerReadyEvent.InvokeEvent(e => e( sender, args));
         }
         
         private void Connect(Guid ipcguid) {

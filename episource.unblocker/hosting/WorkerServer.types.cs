@@ -13,32 +13,22 @@ namespace episource.unblocker.hosting {
                 this.cts.Cancel();
             }
 
-            public void NotifyUnload() {
-                this.unloadScheduled = true;
-            }
-
-            public void InvokeSynchronously(
+            public EventArgs InvokeSynchronously(
                 WorkerServer parent, InvocationRequest.PortableInvocationRequest portableInvocationRequest
             ) {
                 // Important: Calling parent.OnRunner* causes the app domain executing the current runner to be unloaded
                 try {
                     this.cts.Token.ThrowIfCancellationRequested();
                     var result = portableInvocationRequest.ToInvocationRequest().Invoke(this.cts.Token);
-                    parent.OnRunnerSucceeded(this, result);
+                    return new TaskSucceededEventArgs(result);
                 } catch (OperationCanceledException e) {
                     if (e.CancellationToken == this.cts.Token) {
-                        parent.OnRunnerCanceled(this);
-                    } else {
-                        parent.OnRunnerFailed(this, e);
-                    }
-                } catch (ThreadAbortException e) {
-                    // if the appdomain is scheduled for unloading we are already dead and notifying the parent
-                    // will be of no use - even worse it will fail unloading the appdomain cleanly.
-                    if (!this.unloadScheduled) {
-                        parent.OnRunnerFailed(this, e);
-                    }
+                        return new TaskCanceledEventArgs(true);
+                    } 
+                        
+                    return new TaskFailedEventArgs(e);
                 } catch (Exception e) {
-                    parent.OnRunnerFailed(this, e);
+                    return new TaskFailedEventArgs(e);
                 }
             }
         }
