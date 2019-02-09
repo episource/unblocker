@@ -12,7 +12,7 @@ using episource.unblocker.tasks;
 
 namespace episource.unblocker {
     public sealed class Unblocker : IDisposable {
-        private static readonly TimeSpan DefaultStandbyDelay = TimeSpan.FromMilliseconds(10000);
+        private static readonly TimeSpan defaultStandbyDelay = TimeSpan.FromMilliseconds(10000);
 
         private readonly string id;
         private readonly object stateLock = new object();
@@ -32,7 +32,7 @@ namespace episource.unblocker {
             this.maxIdleWorkers = maxIdleWorkers;
             this.debugMode = debug;
             
-            this.standbyTask = new CountdownTask(standbyDelay ?? DefaultStandbyDelay, this.Standby);
+            this.standbyTask = new CountdownTask(standbyDelay ?? defaultStandbyDelay, this.Standby);
         }
         
         public async Task<T> InvokeAsync<T>(
@@ -74,8 +74,10 @@ namespace episource.unblocker {
 
         // releases all idle workers
         public void Standby() {
-            Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                "{0} Standby started.", this.id));
+            if (this.debugMode != DebugMode.None) {
+                Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                    "{0} Standby started.", this.id));
+            }
             
             lock (this.stateLock) {
                 this.RecoverWorkers();
@@ -189,7 +191,7 @@ namespace episource.unblocker {
             this.Dispose(true);
         }
 
-        protected /*virtual*/ void Dispose(bool disposing) {
+        private /*protected virtual*/ void Dispose(bool disposing) {
             if (disposing && !this.disposed) {
                 this.disposed = true;
                 

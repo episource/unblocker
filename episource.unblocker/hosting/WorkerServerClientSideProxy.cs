@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Globalization;
-using System.Runtime.CompilerServices;
 using System.Runtime.Remoting;
 using System.Runtime.Remoting.Channels;
 using System.Runtime.Remoting.Channels.Ipc;
@@ -12,7 +11,7 @@ namespace episource.unblocker.hosting {
     public sealed class WorkerServerClientSideProxy : MarshalByRefObject, IWorkerServer {
         private static readonly object proxyDomainLock = new object(); 
         private static AppDomain proxyDomain;
-        private static int proxyDomainRefCount = 0;
+        private static int proxyDomainRefCount;
         
         public static WorkerServerClientSideProxy ConnectToWorkerServer(Guid ipcguid) {
             var t = typeof(WorkerServerClientSideProxy);
@@ -33,7 +32,7 @@ namespace episource.unblocker.hosting {
 
                     try {
                         proxyDomain.DoCallBack(SetupRemoting);
-                    } catch (Exception e) {
+                    } catch (Exception) {
                         DecrementProxyRef(true);
                         throw;
                     }
@@ -44,7 +43,7 @@ namespace episource.unblocker.hosting {
                         t.Assembly.FullName, t.FullName);
                     proxy.Connect(ipcguid);
                     return proxy;
-                } catch (Exception e) {
+                } catch (Exception) {
                     DecrementProxyRef(true);
                     throw;
                 }
@@ -71,12 +70,18 @@ namespace episource.unblocker.hosting {
 
         // must be public to be bindable to remote events
         public void OnTaskCanceled(object sender, EventArgs e) {
-            this.TaskCanceledEvent(sender, e);
+            var taskCanceledEvent = this.TaskCanceledEvent;
+            if (taskCanceledEvent != null) {
+                taskCanceledEvent(sender, e);
+            }
         }
         
         // must be public to be bindable to remote events
         public void OnTaskSucceeded(object sender, TaskSucceededEventArgs e) {
-            this.TaskSucceededEvent(sender, e);
+            var taskSucceededEvent = this.TaskSucceededEvent;
+            if (taskSucceededEvent != null) {
+                taskSucceededEvent(sender, e);
+            }
         }
         
         // must be public to be bindable to remote events
@@ -125,17 +130,18 @@ namespace episource.unblocker.hosting {
             var ipcChannel = new IpcChannel(ipcProperties,
                 new BinaryClientFormatterSinkProvider(ipcProperties, null),
                 new BinaryServerFormatterSinkProvider(ipcProperties, null));
-            ChannelServices.RegisterChannel(ipcChannel);
+            ChannelServices.RegisterChannel(ipcChannel, false);
         }
         
         #region Dispose & Cleanup
 
         public void Dispose() {
             this.Dispose(true);
+            GC.SuppressFinalize(this);
         }
         
         
-        protected /*virtual*/ void Dispose(bool disposing) {
+        private /*protected virtual*/ void Dispose(bool disposing) {
             if (disposing) {
                 if (this.remoteProxy != null) {
                     this.remoteProxy.ServerDyingEvent -= this.OnServerDying;
@@ -149,20 +155,18 @@ namespace episource.unblocker.hosting {
                     
                     this.remoteProxySponsor.Close();
                 }
-                
-                GC.SuppressFinalize(this);
             }
             
             DecrementProxyRef(disposing);
         }
 
-        protected static void DecrementProxyRef(bool mayThrow) {
+        private static void DecrementProxyRef(bool mayThrow) {
             lock (proxyDomainLock) {
                 proxyDomainRefCount--;
                 if (proxyDomainRefCount == 0 && proxyDomain != null) {
                     try {
                         AppDomain.Unload(proxyDomain);
-                    } catch (CannotUnloadAppDomainException e) {
+                    } catch (CannotUnloadAppDomainException) {
                         if (mayThrow) {
                             throw;
                         }

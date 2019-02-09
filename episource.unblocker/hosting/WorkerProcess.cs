@@ -1,13 +1,9 @@
 using System;
-using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Runtime.Remoting;
-using System.Runtime.Remoting.Channels;
-using System.Runtime.Remoting.Channels.Ipc;
 using System.Threading;
 // ReSharper disable IdentifierTypo
 
@@ -17,7 +13,7 @@ namespace episource.unblocker.hosting {
         public static readonly TimeSpan StartupTimeout = new TimeSpan(0, 0, 10);
 
         private readonly object processLock = new object();
-        private bool disposed = false;
+        private bool disposed;
         private Process process;
         
         // ReSharper disable once MemberCanBePrivate.Global
@@ -114,17 +110,22 @@ namespace episource.unblocker.hosting {
             }
         }
 
-        protected /*virtual*/ void Dispose(bool disposing) {
+        // ReSharper disable once UnusedParameter.Local
+        private /*protected virtual*/ void Dispose(bool disposing) {
             if (!this.disposed) {
                 this.disposed = true;
 
                 try {
+                    // Dispose locks; finalizer should not
+                    // ReSharper disable once InconsistentlySynchronizedField
                     this.process.Kill();
-                } catch (InvalidOperationException e) {
+                } catch (InvalidOperationException) {
                     // has already exited
                 }
 
+                // ReSharper disable once InconsistentlySynchronizedField
                 this.process.Dispose();
+                // ReSharper disable once InconsistentlySynchronizedField
                 this.process = null;
             }
         }

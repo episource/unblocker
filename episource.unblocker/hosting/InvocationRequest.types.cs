@@ -19,6 +19,10 @@ namespace episource.unblocker.hosting {
             private readonly string applicationBase;
 
             public PortableInvocationRequest(InvocationRequest request) {
+                if (request == null) {
+                    throw new ArgumentNullException("request");
+                }
+                
                 this.serializedInvocationRequest = Serialize(request);
                 this.referencePool = new AssemblyReferencePool(AppDomain.CurrentDomain);
                 this.methodName = request.Method.DeclaringType.FullName + "." + request.Method.Name;
@@ -61,7 +65,8 @@ namespace episource.unblocker.hosting {
             private readonly IDictionary<string, string> nameToLocationMap;
 
             public AssemblyReferencePool(AppDomain hostDomain) {
-                hostDomain.GetAssemblies().Where(a => !a.IsDynamic).ToDictionary(a => a.FullName, a => a.Location);
+                this.nameToLocationMap = hostDomain.GetAssemblies().Where(a => !a.IsDynamic)
+                                                   .ToDictionary(a => a.FullName, a => a.Location);
             }
 
             public void AttachToDomain(AppDomain target) {

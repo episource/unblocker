@@ -22,8 +22,8 @@ namespace episource.unblocker.hosting {
             ) {
                 // Important: Calling parent.OnRunner* causes the app domain executing the current runner to be unloaded
                 try {
-                    cts.Token.ThrowIfCancellationRequested();
-                    var result = portableInvocationRequest.ToInvocationRequest().Invoke(cts.Token);
+                    this.cts.Token.ThrowIfCancellationRequested();
+                    var result = portableInvocationRequest.ToInvocationRequest().Invoke(this.cts.Token);
                     parent.OnRunnerSucceeded(this, result);
                 } catch (OperationCanceledException e) {
                     if (e.CancellationToken == this.cts.Token) {

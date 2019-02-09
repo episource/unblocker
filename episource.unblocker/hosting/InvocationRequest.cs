@@ -55,7 +55,8 @@ namespace episource.unblocker.hosting {
                 throw new ArgumentNullException("invocation");
             }
 
-            if (invocation.Parameters.Count != 1 || invocation.Parameters[0].Type is CancellationToken) {
+            if (invocation.Parameters.Count != 1 
+                    || !typeof(CancellationToken).IsAssignableFrom(invocation.Parameters[0].Type)) {
                 throw new ArgumentException(
                     "Only parameter of invocation lambda must be of type CancellationToken, but was different.",
                     "invocation");
@@ -105,17 +106,25 @@ namespace episource.unblocker.hosting {
             if (obj is CancellationToken) {
                 return new CancellationTokenMarker();
             }
-            if (obj != null && !(
-                    obj is ISerializable         ||
-                    obj is string                ||
-                    obj.GetType().IsSerializable ||
-                    obj.GetType().IsPrimitive)) {
+            if (!IsSerializable(obj)) {
                 throw new SerializationException(
                     string.Format("Evaluation result of expression `{0}` ({1} = {2}) is not serializable.",
                         anyExpression, obj.GetType().FullName, obj));
             }
 
             return obj;
+        }
+
+        private static bool IsSerializable(object obj) {
+            return obj == null || IsSerializableType(obj.GetType());
+        }
+
+        private static bool IsSerializableType(Type t) {
+            return  typeof(ISerializable).IsAssignableFrom(t) ||
+                    typeof(string).IsAssignableFrom(t)        ||
+                    typeof(void) == t                         ||
+                    t.IsSerializable                          ||
+                    t.IsPrimitive;
         }
     }
 }

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.ObjectModel;
 using System.Linq.Expressions;
 using System.Runtime.Remoting.Lifetime;
 using System.Security;
@@ -122,7 +121,7 @@ namespace episource.unblocker.hosting {
             }
             
             // outside lock!
-            this.CurrentStateChangedEvent(this, new WorkerStateChangedEventArgs(nextState));
+            this.OnCurrentStateChanged(nextState);
             
             ct.Register(() => this.serverProxy.Cancel(cancellationTimeout));
             this.serverProxy.InvokeAsync(request.ToPortableInvocationRequest(), securityZone);
@@ -136,6 +135,14 @@ namespace episource.unblocker.hosting {
             }
             
             return this.activeTcs.Task;
+        }
+
+        // do not hold state lock when invoking this!
+        private void OnCurrentStateChanged(State nextState) {
+            var handler = this.CurrentStateChangedEvent;
+            if (handler != null) {
+                this.CurrentStateChangedEvent(this, new WorkerStateChangedEventArgs(nextState));
+            }
         }
 
         private void OnRemoteTaskCanceled(object sender, EventArgs args) {
@@ -160,7 +167,7 @@ namespace episource.unblocker.hosting {
             }
             
             // outside lock!
-            this.CurrentStateChangedEvent(this, new WorkerStateChangedEventArgs(nextState));
+            this.OnCurrentStateChanged(nextState);
         }
 
         private void OnServerDying(object sender, EventArgs e) {
@@ -178,7 +185,7 @@ namespace episource.unblocker.hosting {
             this.TestifyServerDeath();
             
             // outside lock!
-            this.CurrentStateChangedEvent(this, new WorkerStateChangedEventArgs(nextState));
+            this.OnCurrentStateChanged(nextState);
         }
 
         private void OnServerReady(object sender, EventArgs e) {
@@ -195,7 +202,7 @@ namespace episource.unblocker.hosting {
             }
             
             // outside lock!
-            this.CurrentStateChangedEvent(this, new WorkerStateChangedEventArgs(nextState));
+            this.OnCurrentStateChanged(nextState);
         }
 
         private async void TestifyServerDeath() {
@@ -207,7 +214,7 @@ namespace episource.unblocker.hosting {
             this.Dispose(true);
         }
 
-        protected /*virtual*/ void Dispose(bool disposing) {
+        private /*protected virtual*/ void Dispose(bool disposing) {
             if (disposing && this.state != State.Dead) {
                 const State nextState = State.Dead;
                 
@@ -225,7 +232,7 @@ namespace episource.unblocker.hosting {
                 }
                 
                 // outside lock!
-                this.CurrentStateChangedEvent(this, new WorkerStateChangedEventArgs(nextState));
+                this.OnCurrentStateChanged(nextState);
             }
         }
     }

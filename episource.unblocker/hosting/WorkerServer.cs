@@ -1,10 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.Globalization;
-using System.Reflection;
 using System.Runtime.Remoting.Lifetime;
 using System.Security;
-using System.Security.Permissions;
 using System.Security.Policy;
 using System.Threading.Tasks;
 
@@ -58,6 +56,9 @@ namespace episource.unblocker.hosting {
         public void InvokeAsync(
             InvocationRequest.PortableInvocationRequest invocationRequest, SecurityZone securityZone
         ) {
+            if (invocationRequest == null) {
+                throw new ArgumentNullException("invocationRequest");
+            }
             lock (this.stateLock) {
                 if (!this.isReady) {
                     throw new InvalidOperationException(
@@ -72,6 +73,8 @@ namespace episource.unblocker.hosting {
 
                 var taskDomainName = string.Format(CultureInfo.InvariantCulture, "{0}_{1}",
                     invocationRequest.MethodName,  DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+                
+                // ReSharper disable once AssignNullToNotNullAttribute
                 this.activeRunnerDomain = AppDomain.CreateDomain(taskDomainName, AppDomain.CurrentDomain.Evidence,
                     new AppDomainSetup {
                         ApplicationBase = invocationRequest.ApplicationBase,
@@ -92,7 +95,11 @@ namespace episource.unblocker.hosting {
         private void OnRunnerSucceeded(TaskRunner runner, object result) {
             lock (this.stateLock) {
                 if (this.IsActiveRunner(runner)) {
-                    this.TaskSucceededEvent(this, new TaskSucceededEventArgs(result));
+                    var taskSucceededEvent = this.TaskSucceededEvent;
+                    if (taskSucceededEvent != null) {
+                        taskSucceededEvent(this, new TaskSucceededEventArgs(result));
+                    }
+
                     this.Cleanup(true);
                 }
             }
@@ -101,7 +108,11 @@ namespace episource.unblocker.hosting {
         private void OnRunnerFailed(TaskRunner runner, Exception e) {
             lock (this.stateLock) {
                 if (this.IsActiveRunner(runner)) {
-                    this.TaskFailedEvent(this, new TaskFailedEventArgs(e));
+                    var taskFailedEvent = this.TaskFailedEvent;
+                    if (taskFailedEvent != null) {
+                        taskFailedEvent(this, new TaskFailedEventArgs(e));
+                    }
+
                     this.Cleanup(true);
                 }
             }
@@ -110,7 +121,11 @@ namespace episource.unblocker.hosting {
         private void OnRunnerCanceled(TaskRunner runner) {
             lock (this.stateLock) {
                 if (this.IsActiveRunner(runner)) {
-                    this.TaskCanceledEvent(this, EventArgs.Empty);
+                    var taskCanceledEvent = this.TaskCanceledEvent;
+                    if (taskCanceledEvent != null) {
+                        taskCanceledEvent(this, EventArgs.Empty);
+                    }
+
                     this.Cleanup(true);
                 }
             }
@@ -120,9 +135,8 @@ namespace episource.unblocker.hosting {
             lock (this.stateLock) {
                 if (runner != this.activeRunner) {
                     Console.WriteLine(string.Format(
-                        CultureInfo.InvariantCulture,
-                        "{0} runner ({1}) != this.activeRunner ({2})",
-                        serverId, runner, this.activeRunner));
+                        CultureInfo.InvariantCulture, "{0} runner ({1}) != this.activeRunner ({2})",
+                        this.serverId, runner, this.activeRunner));
                     return false;
                 }
 
@@ -149,13 +163,14 @@ namespace episource.unblocker.hosting {
                 }
 
                 if (!cleanShutdown) {
-                    Console.WriteLine(serverId + " Failed to cancel task. Going to kill the task. Let's tell.");
+                    Console.WriteLine(
+                        this.serverId + " Failed to cancel task. Going to kill the task. Let's tell.");
                     this.TaskCanceledEvent(this, EventArgs.Empty);
                 }
                 
 
                 try {
-                    Console.WriteLine(serverId + " Going to unload the task's AppDomain.");
+                    Console.WriteLine(this.serverId + " Going to unload the task's AppDomain.");
                     
                     this.activeRunner.NotifyUnload();
                     this.proxyLifetimeSponsor.Unregister(this.activeRunner);
@@ -164,13 +179,13 @@ namespace episource.unblocker.hosting {
                     AppDomain.Unload(this.activeRunnerDomain);
                     this.activeRunnerDomain = null;
                     
-                    Console.WriteLine(serverId + " Done unloading the task's AppDomain.");
+                    Console.WriteLine(this.serverId + " Done unloading the task's AppDomain.");
 
                     this.isReady = true;
                     this.ServerReadyEvent(this, EventArgs.Empty);
                 } catch (CannotUnloadAppDomainException e) {
-                    Console.WriteLine(serverId + " Failed to unload task's AppDomain: " + e.Message);
-                    Console.WriteLine(serverId + " Going to kill myself!");
+                    Console.WriteLine(this.serverId + " Failed to unload task's AppDomain: " + e.Message);
+                    Console.WriteLine(this.serverId + " Going to kill myself!");
 
                     this.ServerDyingEvent(this, EventArgs.Empty); 
                     
@@ -178,9 +193,9 @@ namespace episource.unblocker.hosting {
                     try {
                         Process.GetCurrentProcess().Kill();
                     } catch (Exception ee) {
-                        Console.WriteLine(serverId + " Failed to commit suicide: " + ee.Message);
+                        Console.WriteLine(this.serverId + " Failed to commit suicide: " + ee.Message);
                         Console.WriteLine(ee.StackTrace);
-                        Console.WriteLine(serverId + " Client will have to take care of that!");   
+                        Console.WriteLine(this.serverId + " Client will have to take care of that!");   
                     }
                 }
             }
@@ -196,7 +211,7 @@ namespace episource.unblocker.hosting {
             }
         }
 
-        protected /*virtual*/ void Dispose(bool disposing) {
+        private /*protected virtual*/ void Dispose(bool disposing) {
             if (disposing) {
                 this.Cancel(TimeSpan.FromMilliseconds(50));
             }

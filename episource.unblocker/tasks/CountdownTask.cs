@@ -73,6 +73,7 @@ namespace episource.unblocker.tasks {
         // CancellationTokenSource passed together with corresponding CancellationToken:
         // cts might have been disposed already, which would make cts.Token throw!
         // cts still needed for CompareExchange
+        // ReSharper disable once ParameterHidesMember
         private async void ScheduleAction(CancellationTokenSource cts, CancellationToken ct) {
             try {
                 await Task.Delay(this.countdown, ct).ConfigureAwait(false);
