@@ -208,6 +208,9 @@ namespace episource.unblocker.hosting {
         private async void TestifyServerDeath() {
             await Task.Delay(TestifyServerDeathWatchdog).ConfigureAwait(false);
             this.Dispose();
+            
+            // outside lock!
+            this.OnCurrentStateChanged(this.state);
         }
 
         public void Dispose() {
@@ -216,10 +219,8 @@ namespace episource.unblocker.hosting {
 
         private /*protected virtual*/ void Dispose(bool disposing) {
             if (disposing && this.state != State.Dead) {
-                const State nextState = State.Dead;
-                
                 lock (this.stateLock) {
-                    this.state = nextState;
+                    this.state = State.Dead;
                     
                     this.serverProxy.ServerDyingEvent -= this.OnServerDying;
                     this.serverProxy.ServerReadyEvent -= this.OnServerReady;
@@ -230,9 +231,6 @@ namespace episource.unblocker.hosting {
                     this.proxyLifetimeSponsor.Close();
                     this.process.Dispose();
                 }
-                
-                // outside lock!
-                this.OnCurrentStateChanged(nextState);
             }
         }
     }
