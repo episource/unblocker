@@ -12,7 +12,6 @@ using episource.unblocker.tasks;
 
 namespace episource.unblocker {
     public sealed class Unblocker : IDisposable {
-        private static readonly TimeSpan DefaultCleanupDelay = TimeSpan.FromMilliseconds(150);
         private static readonly TimeSpan DefaultStandbyDelay = TimeSpan.FromMilliseconds(10000);
 
         private readonly string id;
@@ -21,21 +20,18 @@ namespace episource.unblocker {
         private readonly Queue<WorkerClient> idleClients = new Queue<WorkerClient>();
         private readonly LinkedList<WorkerClient> busyClients = new LinkedList<WorkerClient>();
         private readonly DebugMode debugMode;
-        private readonly CountdownTask cleanupTask;
         private readonly CountdownTask standbyTask;
 
         private volatile bool disposed;
 
         public Unblocker(
-            int maxIdleWorkers = 1, DebugMode debug = DebugMode.None,
-            TimeSpan? cleanupDelay = null, TimeSpan? standbyDelay = null
+            int maxIdleWorkers = 1, DebugMode debug = DebugMode.None, TimeSpan? standbyDelay = null
         ) {
             this.id = "[unblocker:" + this.GetHashCode() + "]";
             
             this.maxIdleWorkers = maxIdleWorkers;
             this.debugMode = debug;
             
-            this.cleanupTask = new CountdownTask(cleanupDelay ?? DefaultCleanupDelay, this.Cleanup);
             this.standbyTask = new CountdownTask(standbyDelay ?? DefaultStandbyDelay, this.Standby);
         }
         
@@ -48,15 +44,13 @@ namespace episource.unblocker {
             }
             
             try {
-                this.cleanupTask.Cancel();
                 this.standbyTask.Cancel();
                 
                 return await this.ActivateWorker()
                                        .InvokeRemotely(invocation, ct, cancellationTimeout, securityZone)
                                        .ConfigureAwait(false);
             } finally {
-                // standbyTask started during cleanup
-                this.cleanupTask.Reset();
+                this.standbyTask.Reset();
             }
             
         }
@@ -70,13 +64,11 @@ namespace episource.unblocker {
             }
 
             try {
-                this.cleanupTask.Cancel();
                 this.standbyTask.Cancel();
                 
                 await this.ActivateWorker().InvokeRemotely(invocation, ct, cancellationTimeout, securityZone);
             } finally {
-                // standbyTask started during cleanup
-                this.cleanupTask.Reset();
+                this.standbyTask.Reset();
             }
         }
 
@@ -92,10 +84,6 @@ namespace episource.unblocker {
                     client.Dispose();
                 }
                 this.idleClients.Clear();
-
-                if (this.busyClients.Count > 0) {
-                    this.cleanupTask.TryStart();
-                }
             }
         }
 
@@ -110,13 +98,24 @@ namespace episource.unblocker {
             
             lock (this.stateLock) {
                 this.RecoverWorkers();
-                var nextClient = this.idleClients.Count > 0 
-                    ? this.idleClients.Dequeue() 
-                    : new WorkerProcess().Start(this.debugMode);
+
+                WorkerClient nextClient;
+                if (this.idleClients.Count > 0) {
+                    nextClient = this.idleClients.Dequeue();
+                } else {
+                    nextClient = new WorkerProcess().Start(this.debugMode);
+                    nextClient.CurrentStateChangedEvent += this.OnWorkerCurrentStateChanged;
+                }
                 this.busyClients.AddLast(nextClient);
 
                 this.EnsureWorkerLimit();
                 return nextClient;
+            }
+        }
+
+        private void OnWorkerCurrentStateChanged(object sender, WorkerStateChangedEventArgs args) {
+            if (args.State == WorkerClient.State.Idle || args.State == WorkerClient.State.Dying) {
+                this.Cleanup();
             }
         }
 
@@ -155,6 +154,8 @@ namespace episource.unblocker {
                                     "{0} Disposing dying/dead worker: {1}", this.id, worker));
                             }
                             this.busyClients.Remove(curNode);
+                            
+                            worker.CurrentStateChangedEvent -= this.OnWorkerCurrentStateChanged;
                             worker.Dispose();
                             break;
                         default:
@@ -175,7 +176,8 @@ namespace episource.unblocker {
                         Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
                             "{0} Disposing surplus worker: {1}", this.id, worker));
                     }
-                    
+
+                    worker.CurrentStateChangedEvent -= this.OnWorkerCurrentStateChanged;
                     worker.Dispose();
                 }
             }
@@ -193,11 +195,13 @@ namespace episource.unblocker {
                 
                 lock (this.stateLock) {
                     foreach (var client in this.idleClients) {
+                        client.CurrentStateChangedEvent -= this.OnWorkerCurrentStateChanged;
                         client.Dispose();
                     }
                     this.idleClients.Clear();
 
                     foreach (var client in this.busyClients) {
+                        client.CurrentStateChangedEvent -= this.OnWorkerCurrentStateChanged;
                         client.Dispose();
                     }
                     this.busyClients.Clear();

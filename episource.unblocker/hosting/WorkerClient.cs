@@ -8,6 +8,15 @@ using System.Threading.Tasks;
 
 
 namespace episource.unblocker.hosting {
+    [Serializable]
+    public sealed class WorkerStateChangedEventArgs : EventArgs {
+        public WorkerStateChangedEventArgs(WorkerClient.State state) {
+            this.State = state;
+        }
+        
+        public WorkerClient.State State { get; private set; }
+    }
+    
     public sealed class WorkerClient : MarshalByRefObject, IDisposable{
         public enum State {
             Idle,
@@ -46,6 +55,9 @@ namespace episource.unblocker.hosting {
             this.serverProxy.TaskSucceededEvent += this.OnRemoteTaskSucceeded;
         }
 
+        // Important: don't raise when holding the state lock!
+        public event EventHandler<WorkerStateChangedEventArgs> CurrentStateChangedEvent;
+
         public State CurrentState {
             get {
                 lock (this.stateLock) {
@@ -82,6 +94,8 @@ namespace episource.unblocker.hosting {
         private Task<object> InvokeRemotely(
             InvocationRequest request, CancellationToken ct, TimeSpan cancellationTimeout, SecurityZone securityZone
         ) {
+            const State nextState = State.Busy;
+            
             lock (this.stateLock) {               
                 if (this.CurrentState != State.Idle) {
                     throw new InvalidOperationException(
@@ -104,9 +118,12 @@ namespace episource.unblocker.hosting {
                     return this.activeTcs.Task;
                 }
                 
-                this.state = State.Busy;
+                this.state = nextState;
             }
-
+            
+            // outside lock!
+            this.CurrentStateChangedEvent(this, new WorkerStateChangedEventArgs(nextState));
+            
             ct.Register(() => this.serverProxy.Cancel(cancellationTimeout));
             this.serverProxy.InvokeAsync(request.ToPortableInvocationRequest(), securityZone);
 
@@ -122,44 +139,53 @@ namespace episource.unblocker.hosting {
         }
 
         private void OnRemoteTaskCanceled(object sender, EventArgs args) {
-            lock (this.stateLock) {
-                this.state = State.Cleanup;
-                this.activeTcs.TrySetCanceled();
-                this.activeTcs = null;
-            }
+            this.OnRemoteTaskDone(tcs => tcs.TrySetCanceled());
         }
         private void OnRemoteTaskSucceeded(object sender, TaskSucceededEventArgs args) {
-            lock (this.stateLock) {
-                this.state = State.Cleanup;
-                this.activeTcs.TrySetResult(args.Result);
-                this.activeTcs = null;
-            }
+            this.OnRemoteTaskDone(tcs => tcs.TrySetResult(args.Result));
         }
 
         private void OnRemoteTaskFailed(object sender, TaskFailedEventArgs args) {
+            this.OnRemoteTaskDone(tcs => tcs.TrySetException(args.Exception));
+        }
+
+        private void OnRemoteTaskDone(Action<TaskCompletionSource<object>> tcsUpdate) {
+            const State nextState = State.Cleanup;
+            
             lock (this.stateLock) {
-                this.state = State.Cleanup;
-                this.activeTcs.TrySetException(args.Exception);
+                this.state = nextState;
+                
+                tcsUpdate(this.activeTcs);
                 this.activeTcs = null;
             }
+            
+            // outside lock!
+            this.CurrentStateChangedEvent(this, new WorkerStateChangedEventArgs(nextState));
         }
 
         private void OnServerDying(object sender, EventArgs e) {
+            const State nextState = State.Dying;
+            
             lock (this.stateLock) {
-                this.state = State.Dying;
+                this.state = nextState;
 
                 if (this.activeTcs != null) {
                     this.activeTcs.TrySetCanceled();
                     this.activeTcs = null;
                 }
-
-                this.TestifyServerDeath();
             }
+            
+            this.TestifyServerDeath();
+            
+            // outside lock!
+            this.CurrentStateChangedEvent(this, new WorkerStateChangedEventArgs(nextState));
         }
 
         private void OnServerReady(object sender, EventArgs e) {
+            const State nextState = State.Idle;
+            
             lock (this.stateLock) {
-                this.state = State.Idle;
+                this.state = nextState;
 
                 // should never happen - nevertheless give the best to handle this
                 if (this.activeTcs != null) {
@@ -167,6 +193,9 @@ namespace episource.unblocker.hosting {
                     this.activeTcs = null;
                 }
             }
+            
+            // outside lock!
+            this.CurrentStateChangedEvent(this, new WorkerStateChangedEventArgs(nextState));
         }
 
         private async void TestifyServerDeath() {
@@ -175,23 +204,28 @@ namespace episource.unblocker.hosting {
         }
 
         public void Dispose() {
-            lock (this.stateLock) {
-                this.Dispose(true);
-            }
+            this.Dispose(true);
         }
 
         protected /*virtual*/ void Dispose(bool disposing) {
             if (disposing && this.state != State.Dead) {
-                this.state = State.Dead;
+                const State nextState = State.Dead;
                 
-                this.serverProxy.ServerDyingEvent -= this.OnServerDying;
-                this.serverProxy.ServerReadyEvent -= this.OnServerReady;
-                this.serverProxy.TaskFailedEvent -= this.OnRemoteTaskFailed;
-                this.serverProxy.TaskCanceledEvent -= this.OnRemoteTaskCanceled;
-                this.serverProxy.TaskSucceededEvent -= this.OnRemoteTaskSucceeded;
+                lock (this.stateLock) {
+                    this.state = nextState;
+                    
+                    this.serverProxy.ServerDyingEvent -= this.OnServerDying;
+                    this.serverProxy.ServerReadyEvent -= this.OnServerReady;
+                    this.serverProxy.TaskFailedEvent -= this.OnRemoteTaskFailed;
+                    this.serverProxy.TaskCanceledEvent -= this.OnRemoteTaskCanceled;
+                    this.serverProxy.TaskSucceededEvent -= this.OnRemoteTaskSucceeded;
+                    
+                    this.proxyLifetimeSponsor.Close();
+                    this.process.Dispose();
+                }
                 
-                this.proxyLifetimeSponsor.Close();
-                this.process.Dispose();
+                // outside lock!
+                this.CurrentStateChangedEvent(this, new WorkerStateChangedEventArgs(nextState));
             }
         }
     }
