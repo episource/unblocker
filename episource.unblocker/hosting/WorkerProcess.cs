@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -28,17 +29,24 @@ namespace episource.unblocker.hosting {
 
         public bool IsAlive {
             get {
-                lock (this.processLock) {
-                    return this.process != null && !this.process.HasExited;
-                }
+                var p = this.process;
+
+                try {
+                    return p != null && !p.HasExited;
+                } catch (InvalidOperationException) { } catch (Win32Exception) { }
+
+                return false;
             }
         }
 
         public int Id {
             get {
-                lock (this.processLock) {
-                    return this.process.Id;
+                var p = this.process;
+                if (p == null) {
+                    throw new InvalidOperationException("Id has not been set / process not active.");
                 }
+
+                return p.Id;
             }
         }
 

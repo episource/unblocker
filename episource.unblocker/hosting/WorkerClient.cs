@@ -59,9 +59,7 @@ namespace episource.unblocker.hosting {
 
         public State CurrentState {
             get {
-                lock (this.stateLock) {
-                    return this.state;
-                }
+                return this.state;
             }
         }
         
@@ -106,7 +104,7 @@ namespace episource.unblocker.hosting {
                     throw new InvalidOperationException("Worker process not alive / crashed.");
                 }
                 
-                
+                this.state = nextState;
                 this.activeTcs = new TaskCompletionSource<object>();
                 
                 // this is the latest time to check whether the task has already been cancelled, before actually
@@ -116,8 +114,6 @@ namespace episource.unblocker.hosting {
                     this.activeTcs = null;
                     return this.activeTcs.Task;
                 }
-                
-                this.state = nextState;
             }
             
             // outside lock!
@@ -174,12 +170,12 @@ namespace episource.unblocker.hosting {
             const State nextState = State.Dying;
             
             lock (this.stateLock) {
-                this.state = nextState;
-
                 if (this.activeTcs != null) {
                     this.activeTcs.TrySetCanceled();
                     this.activeTcs = null;
                 }
+                
+                this.state = nextState;
             }
             
             this.TestifyServerDeath();
@@ -192,13 +188,13 @@ namespace episource.unblocker.hosting {
             const State nextState = State.Idle;
             
             lock (this.stateLock) {
-                this.state = nextState;
-
                 // should never happen - nevertheless give the best to handle this
                 if (this.activeTcs != null) {
                     this.activeTcs.TrySetCanceled();
                     this.activeTcs = null;
                 }
+                
+                this.state = nextState;
             }
             
             // outside lock!
