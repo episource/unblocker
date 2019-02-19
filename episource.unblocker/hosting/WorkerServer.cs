@@ -1,9 +1,6 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
-using System.Reflection;
-using System.Runtime.Remoting;
 using System.Runtime.Remoting.Lifetime;
 using System.Security;
 using System.Security.Policy;
@@ -49,7 +46,10 @@ namespace episource.unblocker.hosting {
             lock (this.stateLock) {
                 if (this.activeRunner != null && this.cleanupTaskCts == null) {
                     this.cleanupTaskCts = new CancellationTokenSource();
-                    this.EnsureCanceled(cancelTimeout, forcedCancellationMode, this.cleanupTaskCts.Token);
+                    
+                    // ReSharper disable once UnusedVariable
+                    var ensureCanceledTask = this.EnsureCanceled(
+                        cancelTimeout, forcedCancellationMode, this.cleanupTaskCts.Token);
                     
                     this.activeRunner.Cancel();
                 }
@@ -71,6 +71,7 @@ namespace episource.unblocker.hosting {
                         "Not ready: currently executing another task or cleaning up.");
                 }
                 this.isReady = false;
+                
 
                 var zoneEvidence = new Evidence();
                 zoneEvidence.AddHostEvidence(new Zone(securityZone));
@@ -87,14 +88,13 @@ namespace episource.unblocker.hosting {
                     }, zonePermissions, typeof(WorkerServer).GetStrongNameOfAssemblyAsArray());
 
                 this.activeRunner = (TaskRunner) this.activeRunnerDomain.CreateInstanceFromAndUnwrap(
-                    typeof(TaskRunner).Assembly.Location,
-                    typeof(TaskRunner).FullName);
+                    typeof(TaskRunner).Assembly.Location,typeof(TaskRunner).FullName);
                 this.proxyLifetimeSponsor.Register(this.activeRunner);
             }
 
             Task.Run(() => {
                 // the only way for the runner to throw is an forced shutdown of the appdomain!
-                var result = this.activeRunner.InvokeSynchronously(this, invocationRequest);
+                var result = this.activeRunner.InvokeSynchronously(invocationRequest);
 
                 try {
                     this.OnRunnerDone(result);
@@ -159,7 +159,8 @@ namespace episource.unblocker.hosting {
             }
 
             if (!asyncCancellation) {
-                this.CleanupWatchdog(halfCancelTimeout, ct);
+                // ReSharper disable once UnusedVariable
+                var cleanupTask = this.CleanupWatchdog(halfCancelTimeout, ct);
             }
             
             this.Cleanup(false, asyncCancellation);

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq.Expressions;
-using System.Runtime.CompilerServices;
 using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,7 +22,6 @@ namespace episource.unblocker {
         private readonly DebugMode debugMode;
         private readonly CountdownTask standbyTask;
         private readonly TimeSpan defaultCancellationTimeout;
-        private readonly TimeSpan defaultCleanupTimeout;
 
         private volatile bool disposed;
 

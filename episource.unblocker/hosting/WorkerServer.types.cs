@@ -7,14 +7,13 @@ namespace episource.unblocker.hosting {
         // may be used for one invocation only!
         private sealed class TaskRunner : MarshalByRefObject {
             private readonly CancellationTokenSource cts = new CancellationTokenSource();
-            private volatile bool unloadScheduled;
 
             public void Cancel() {
                 this.cts.Cancel();
             }
 
             public EventArgs InvokeSynchronously(
-                WorkerServer parent, InvocationRequest.PortableInvocationRequest portableInvocationRequest
+                InvocationRequest.PortableInvocationRequest portableInvocationRequest
             ) {
                 // Important: Calling parent.OnRunner* causes the app domain executing the current runner to be unloaded
                 try {

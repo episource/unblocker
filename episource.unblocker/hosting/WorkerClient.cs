@@ -25,9 +25,6 @@ namespace episource.unblocker.hosting {
             Dead
         }
         
-        // task gets killed if it can't be cancelled within this time
-        private static readonly TimeSpan DefaultCancellationTimeout = TimeSpan.FromMilliseconds(50);
-
         private readonly object stateLock = new object();
         private readonly ClientSponsor proxyLifetimeSponsor = new ClientSponsor();
         private readonly string id;
