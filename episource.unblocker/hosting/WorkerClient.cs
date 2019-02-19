@@ -1,5 +1,6 @@
 using System;
 using System.Linq.Expressions;
+using System.Runtime.Remoting;
 using System.Runtime.Remoting.Lifetime;
 using System.Security;
 using System.Threading;
@@ -21,13 +22,11 @@ namespace episource.unblocker.hosting {
             Idle,
             Busy,
             Cleanup,
-            Dying,
-            Dead,
+            Dead
         }
         
         // task gets killed if it can't be cancelled within this time
         private static readonly TimeSpan DefaultCancellationTimeout = TimeSpan.FromMilliseconds(50);
-        private static readonly TimeSpan TestifyServerDeathWatchdog = DefaultCancellationTimeout;
 
         private readonly object stateLock = new object();
         private readonly ClientSponsor proxyLifetimeSponsor = new ClientSponsor();
@@ -47,7 +46,8 @@ namespace episource.unblocker.hosting {
                 this.proxyLifetimeSponsor.Register((MarshalByRefObject)this.serverProxy);
             }
 
-            this.serverProxy.ServerDyingEvent += this.OnServerDying;
+            this.process.ProcessDeadEvent += this.OnProcessDead;
+            
             this.serverProxy.ServerReadyEvent += this.OnServerReady;
             this.serverProxy.TaskFailedEvent += this.OnRemoteTaskFailed;
             this.serverProxy.TaskCanceledEvent += this.OnRemoteTaskCanceled;
@@ -64,23 +64,21 @@ namespace episource.unblocker.hosting {
         }
         
         public async Task<T> InvokeRemotely<T>(
-            Expression<Func<CancellationToken, T>> invocation, CancellationToken ct = new CancellationToken(),
-            TimeSpan? cancellationTimeout = null, SecurityZone securityZone = SecurityZone.MyComputer
+            Expression<Func<CancellationToken, T>> invocation, CancellationToken ct,
+            TimeSpan cancellationTimeout, ForcedCancellationMode forcedCancellationMode, SecurityZone securityZone
         ) {
             var request = InvocationRequest.FromExpression(invocation);
-            return (T) await this.InvokeRemotely(request, ct,
-                                     cancellationTimeout.GetValueOrDefault(DefaultCancellationTimeout),
-                                     securityZone)
+            return (T) await this.InvokeRemotely(request, ct, cancellationTimeout, forcedCancellationMode, securityZone)
                                  .ConfigureAwait(false);
         }
 
         public async Task InvokeRemotely(
-            Expression<Action<CancellationToken>> invocation, CancellationToken ct = new CancellationToken(),
-            TimeSpan? cancellationTimeout = null, SecurityZone securityZone = SecurityZone.MyComputer
+            Expression<Action<CancellationToken>> invocation, CancellationToken ct,
+            TimeSpan cancellationTimeout, ForcedCancellationMode forcedCancellationMode,
+            SecurityZone securityZone
         ) {
             var request = InvocationRequest.FromExpression(invocation);
-            await this.InvokeRemotely(request, ct, 
-                          cancellationTimeout.GetValueOrDefault(DefaultCancellationTimeout), securityZone)
+            await this.InvokeRemotely(request, ct, cancellationTimeout, forcedCancellationMode, securityZone)
                       .ConfigureAwait(false);
         }
 
@@ -89,7 +87,8 @@ namespace episource.unblocker.hosting {
         }
 
         private Task<object> InvokeRemotely(
-            InvocationRequest request, CancellationToken ct, TimeSpan cancellationTimeout, SecurityZone securityZone
+            InvocationRequest request, CancellationToken ct, TimeSpan cancellationTimeout, 
+            ForcedCancellationMode forcedCancellationMode, SecurityZone securityZone
         ) {
             const State nextState = State.Busy;
             
@@ -100,7 +99,7 @@ namespace episource.unblocker.hosting {
                 }
 
                 if (!this.process.IsAlive) {
-                    this.OnServerDying(this, EventArgs.Empty);
+                    this.OnProcessDead(this, EventArgs.Empty);
                     throw new InvalidOperationException("Worker process not alive / crashed.");
                 }
                 
@@ -119,7 +118,18 @@ namespace episource.unblocker.hosting {
             // outside lock!
             this.OnCurrentStateChanged(nextState);
             
-            ct.Register(() => this.serverProxy.Cancel(cancellationTimeout));
+            ct.Register(() => {
+                try {
+                    this.serverProxy.Cancel(cancellationTimeout, forcedCancellationMode);
+                } catch (RemotingException) {
+                    if (forcedCancellationMode == ForcedCancellationMode.KillImmediately) {
+                        // worker killed itself: ignore!
+                        return;
+                    }
+
+                    throw;
+                }
+            });
             this.serverProxy.InvokeAsync(request.ToPortableInvocationRequest(), securityZone);
 
             // Calling Cancel(..) on the server is only handled if there's a invocation request being handled!
@@ -127,7 +137,7 @@ namespace episource.unblocker.hosting {
             // before registering the cancel callback, as well.
             // At this point we now for sure, that the task has been started!
             if (ct.IsCancellationRequested) {
-                this.serverProxy.Cancel(cancellationTimeout);
+                this.serverProxy.Cancel(cancellationTimeout, forcedCancellationMode);
             }
             
             return this.activeTcs.Task;
@@ -166,8 +176,8 @@ namespace episource.unblocker.hosting {
             this.OnCurrentStateChanged(nextState);
         }
 
-        private void OnServerDying(object sender, EventArgs e) {
-            const State nextState = State.Dying;
+        private void OnProcessDead(object sender, EventArgs e) {
+            const State nextState = State.Dead;
             
             lock (this.stateLock) {
                 if (this.activeTcs != null) {
@@ -178,10 +188,9 @@ namespace episource.unblocker.hosting {
                 this.state = nextState;
             }
             
-            this.TestifyServerDeath();
-            
             // outside lock!
             this.OnCurrentStateChanged(nextState);
+            this.Dispose();
         }
 
         private void OnServerReady(object sender, EventArgs e) {
@@ -201,14 +210,6 @@ namespace episource.unblocker.hosting {
             this.OnCurrentStateChanged(nextState);
         }
 
-        private async void TestifyServerDeath() {
-            await Task.Delay(TestifyServerDeathWatchdog).ConfigureAwait(false);
-            this.Dispose();
-            
-            // outside lock!
-            this.OnCurrentStateChanged(this.state);
-        }
-
         public void Dispose() {
             this.Dispose(true);
         }
@@ -218,7 +219,8 @@ namespace episource.unblocker.hosting {
                 lock (this.stateLock) {
                     this.state = State.Dead;
                     
-                    this.serverProxy.ServerDyingEvent -= this.OnServerDying;
+                    this.process.ProcessDeadEvent -= this.OnProcessDead;
+                    
                     this.serverProxy.ServerReadyEvent -= this.OnServerReady;
                     this.serverProxy.TaskFailedEvent -= this.OnRemoteTaskFailed;
                     this.serverProxy.TaskCanceledEvent -= this.OnRemoteTaskCanceled;

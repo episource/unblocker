@@ -41,6 +41,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="hosting\ForcedCancellationMode.cs" />
     <Compile Include="hosting\HostingExtensions.cs" />
     <Compile Include="hosting\DebugMode.cs" />
     <Compile Include="hosting\RemoteTaskEventArgs.cs" />

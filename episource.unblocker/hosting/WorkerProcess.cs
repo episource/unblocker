@@ -27,6 +27,8 @@ namespace episource.unblocker.hosting {
                 typeof(WorkerServerHost).FullName + ":" + ipcguid);
         }
 
+        public event EventHandler ProcessDeadEvent;
+
         public bool IsAlive {
             get {
                 var p = this.process;
@@ -73,10 +75,18 @@ namespace episource.unblocker.hosting {
                             ipcguid, Process.GetCurrentProcess().Id, debug, typeof(WorkerServerHost).Assembly.Location),
                         FileName = GetInstallUtilLocation(),
                         RedirectStandardOutput = redirectConsole,
-                        RedirectStandardError = redirectConsole
-                    }
+                        RedirectStandardError = redirectConsole,
+                    },
+                    EnableRaisingEvents = true
                 };
 
+                this.process.Exited += (sender, args) => {
+                    var handler = this.ProcessDeadEvent;
+                    if (handler != null) {
+                        handler(this, args);
+                    }
+                };
+                
                 if (redirectConsole) {
                     this.process.OutputDataReceived += (s, e) => Console.WriteLine(e.Data);
                     this.process.ErrorDataReceived += (s, e) => Console.WriteLine(e.Data);

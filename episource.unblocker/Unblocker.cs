@@ -13,6 +13,7 @@ using episource.unblocker.tasks;
 namespace episource.unblocker {
     public sealed class Unblocker : IDisposable {
         private static readonly TimeSpan defaultStandbyDelay = TimeSpan.FromMilliseconds(10000);
+        private static readonly TimeSpan builtinDefaultCancellationTimeout = TimeSpan.FromMilliseconds(50);
 
         private readonly string id;
         private readonly object stateLock = new object();
@@ -21,11 +22,14 @@ namespace episource.unblocker {
         private readonly LinkedList<WorkerClient> busyClients = new LinkedList<WorkerClient>();
         private readonly DebugMode debugMode;
         private readonly CountdownTask standbyTask;
+        private readonly TimeSpan defaultCancellationTimeout;
+        private readonly TimeSpan defaultCleanupTimeout;
 
         private volatile bool disposed;
 
         public Unblocker(
-            int maxIdleWorkers = 1, DebugMode debug = DebugMode.None, TimeSpan? standbyDelay = null
+            int maxIdleWorkers = 1, DebugMode debug = DebugMode.None, TimeSpan? standbyDelay = null,
+            TimeSpan? defaultCancellationTimeout = null
         ) {
             this.id = "[unblocker:" + this.GetHashCode() + "]";
             
@@ -33,11 +37,16 @@ namespace episource.unblocker {
             this.debugMode = debug;
             
             this.standbyTask = new CountdownTask(standbyDelay ?? defaultStandbyDelay, this.Standby);
+
+            this.defaultCancellationTimeout =
+                defaultCancellationTimeout.GetValueOrDefault(builtinDefaultCancellationTimeout);
         }
         
         public async Task<T> InvokeAsync<T>(
             Expression<Func<CancellationToken, T>> invocation, CancellationToken ct = new CancellationToken(),
-            TimeSpan? cancellationTimeout = null, SecurityZone securityZone = SecurityZone.MyComputer
+            TimeSpan? cancellationTimeout = null,
+            ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
+            SecurityZone securityZone = SecurityZone.MyComputer
         ) {
             if (this.disposed) {
                 throw new ObjectDisposedException("This instance has been disposed.");
@@ -47,7 +56,9 @@ namespace episource.unblocker {
                 this.standbyTask.Cancel();
                 
                 return await this.ActivateWorker()
-                                       .InvokeRemotely(invocation, ct, cancellationTimeout, securityZone)
+                                 .InvokeRemotely(invocation, ct,
+                                           cancellationTimeout.GetValueOrDefault(this.defaultCancellationTimeout),
+                                           forcedCancellationMode, securityZone)
                                        .ConfigureAwait(false);
             } finally {
                 this.standbyTask.Reset();
@@ -57,7 +68,9 @@ namespace episource.unblocker {
 
         public async Task InvokeAsync(
             Expression<Action<CancellationToken>> invocation, CancellationToken ct = new CancellationToken(),
-            TimeSpan? cancellationTimeout = null, SecurityZone securityZone = SecurityZone.MyComputer
+            TimeSpan? cancellationTimeout = null,
+            ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
+            SecurityZone securityZone = SecurityZone.MyComputer
         ) {
             if (this.disposed) {
                 throw new ObjectDisposedException("This instance has been disposed.");
@@ -65,8 +78,11 @@ namespace episource.unblocker {
 
             try {
                 this.standbyTask.Cancel();
-                
-                await this.ActivateWorker().InvokeRemotely(invocation, ct, cancellationTimeout, securityZone);
+
+                await this.ActivateWorker()
+                          .InvokeRemotely(invocation, ct,
+                              cancellationTimeout.GetValueOrDefault(this.defaultCancellationTimeout),
+                              forcedCancellationMode, securityZone);
             } finally {
                 this.standbyTask.Reset();
             }
@@ -148,7 +164,6 @@ namespace episource.unblocker {
                             break;
                         case WorkerClient.State.Busy:
                         case WorkerClient.State.Cleanup:
-                        case WorkerClient.State.Dying:
                             break;
                         case WorkerClient.State.Dead:
                             if (this.debugMode != DebugMode.None) {
