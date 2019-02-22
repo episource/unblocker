@@ -62,20 +62,24 @@ namespace episource.unblocker.hosting {
         
         public async Task<T> InvokeRemotely<T>(
             Expression<Func<CancellationToken, T>> invocation, CancellationToken ct,
-            TimeSpan cancellationTimeout, ForcedCancellationMode forcedCancellationMode, SecurityZone securityZone
+            TimeSpan cancellationTimeout, ForcedCancellationMode forcedCancellationMode, SecurityZone securityZone,
+            WorkerProcessRef workerProcessRef
         ) {
             var request = InvocationRequest.FromExpression(invocation);
-            return (T) await this.InvokeRemotely(request, ct, cancellationTimeout, forcedCancellationMode, securityZone)
+            return (T) await this.InvokeRemotely(
+                                     request, ct, cancellationTimeout, forcedCancellationMode, securityZone,
+                                     workerProcessRef)
                                  .ConfigureAwait(false);
         }
 
         public async Task InvokeRemotely(
             Expression<Action<CancellationToken>> invocation, CancellationToken ct,
             TimeSpan cancellationTimeout, ForcedCancellationMode forcedCancellationMode,
-            SecurityZone securityZone
+            SecurityZone securityZone, WorkerProcessRef workerProcessRef
         ) {
             var request = InvocationRequest.FromExpression(invocation);
-            await this.InvokeRemotely(request, ct, cancellationTimeout, forcedCancellationMode, securityZone)
+            await this.InvokeRemotely(
+                          request, ct, cancellationTimeout, forcedCancellationMode, securityZone, workerProcessRef)
                       .ConfigureAwait(false);
         }
 
@@ -85,7 +89,7 @@ namespace episource.unblocker.hosting {
 
         private Task<object> InvokeRemotely(
             InvocationRequest request, CancellationToken ct, TimeSpan cancellationTimeout, 
-            ForcedCancellationMode forcedCancellationMode, SecurityZone securityZone
+            ForcedCancellationMode forcedCancellationMode, SecurityZone securityZone, WorkerProcessRef workerProcessRef
         ) {
             const State nextState = State.Busy;
             
@@ -102,6 +106,10 @@ namespace episource.unblocker.hosting {
                 
                 this.state = nextState;
                 this.activeTcs = new TaskCompletionSource<object>();
+
+                if (workerProcessRef != null) {
+                    workerProcessRef.WorkerProcess = this.process.Process;
+                }
                 
                 // this is the latest time to check whether the task has already been cancelled, before actually
                 // starting the task!

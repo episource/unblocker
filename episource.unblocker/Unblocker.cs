@@ -44,7 +44,7 @@ namespace episource.unblocker {
             Expression<Func<CancellationToken, T>> invocation, CancellationToken ct = new CancellationToken(),
             TimeSpan? cancellationTimeout = null,
             ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
-            SecurityZone securityZone = SecurityZone.MyComputer
+            SecurityZone securityZone = SecurityZone.MyComputer, WorkerProcessRef workerProcessRef = null
         ) {
             if (this.disposed) {
                 throw new ObjectDisposedException("This instance has been disposed.");
@@ -56,7 +56,7 @@ namespace episource.unblocker {
                 return await this.ActivateWorker()
                                  .InvokeRemotely(invocation, ct,
                                            cancellationTimeout.GetValueOrDefault(this.defaultCancellationTimeout),
-                                           forcedCancellationMode, securityZone)
+                                           forcedCancellationMode, securityZone, workerProcessRef)
                                        .ConfigureAwait(false);
             } finally {
                 this.standbyTask.Reset();
@@ -68,7 +68,7 @@ namespace episource.unblocker {
             Expression<Action<CancellationToken>> invocation, CancellationToken ct = new CancellationToken(),
             TimeSpan? cancellationTimeout = null,
             ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
-            SecurityZone securityZone = SecurityZone.MyComputer
+            SecurityZone securityZone = SecurityZone.MyComputer, WorkerProcessRef workerProcessRef = null
         ) {
             if (this.disposed) {
                 throw new ObjectDisposedException("This instance has been disposed.");
@@ -80,7 +80,7 @@ namespace episource.unblocker {
                 await this.ActivateWorker()
                           .InvokeRemotely(invocation, ct,
                               cancellationTimeout.GetValueOrDefault(this.defaultCancellationTimeout),
-                              forcedCancellationMode, securityZone);
+                              forcedCancellationMode, securityZone, workerProcessRef);
             } finally {
                 this.standbyTask.Reset();
             }

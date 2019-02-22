@@ -52,6 +52,10 @@ namespace episource.unblocker.hosting {
             }
         }
 
+        public Process Process {
+            get { return this.process; }
+        }
+
         [SuppressMessage("ReSharper", "StringLiteralTypo")]
         public WorkerClient Start(DebugMode debug = DebugMode.None) {
             lock (this.processLock) {
