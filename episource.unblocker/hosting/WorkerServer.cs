@@ -9,11 +9,10 @@ using System.Threading.Tasks;
 
 namespace episource.unblocker.hosting {
     public interface IWorkerServer : IDisposable {
-        event EventHandler<TaskCanceledEventArgs> TaskCanceledEvent;
-
         event EventHandler<TaskSucceededEventArgs> TaskSucceededEvent;
+        event EventHandler<TaskCanceledEventArgs> TaskCanceledEvent;
         event EventHandler<TaskFailedEventArgs> TaskFailedEvent;
-
+        event EventHandler ServerDyingEvent;
         event EventHandler ServerReadyEvent;
 
         void Cancel(TimeSpan cancelTimeout, ForcedCancellationMode forcedCancellationMode);
@@ -30,9 +29,10 @@ namespace episource.unblocker.hosting {
         private volatile AppDomain activeRunnerDomain;
         private volatile CancellationTokenSource cleanupTaskCts;
 
-        public event EventHandler<TaskCanceledEventArgs> TaskCanceledEvent;
         public event EventHandler<TaskSucceededEventArgs> TaskSucceededEvent;
+        public event EventHandler<TaskCanceledEventArgs> TaskCanceledEvent;
         public event EventHandler<TaskFailedEventArgs> TaskFailedEvent;
+        public event EventHandler ServerDyingEvent;
         public event EventHandler ServerReadyEvent;
 
 
@@ -243,6 +243,7 @@ namespace episource.unblocker.hosting {
 
             // kill current worker in the most robust way possible!
             try {
+                this.ServerDyingEvent.InvokeEvent(e => e(this, EventArgs.Empty));
                 Process.GetCurrentProcess().Kill();
             } catch (Exception exx) {
                 Console.WriteLine(this.serverId + " Failed to commit suicide: " + exx.Message);

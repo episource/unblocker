@@ -57,6 +57,7 @@ namespace episource.unblocker.hosting {
         public event EventHandler<TaskCanceledEventArgs> TaskCanceledEvent;
         public event EventHandler<TaskSucceededEventArgs> TaskSucceededEvent;
         public event EventHandler<TaskFailedEventArgs> TaskFailedEvent;
+        public event EventHandler ServerDyingEvent;
         public event EventHandler ServerReadyEvent;
         
         public void Cancel(TimeSpan cancelTimeout, ForcedCancellationMode forcedCancellationMode) {
@@ -83,6 +84,11 @@ namespace episource.unblocker.hosting {
         }
         
         // must be public to be bindable to remote events
+        public void OnServerDying(object sender, EventArgs args) {
+            this.ServerDyingEvent.InvokeEvent(e => e( sender, args));
+        }
+        
+        // must be public to be bindable to remote events
         public void OnServerReady(object sender, EventArgs args) {
             this.ServerReadyEvent.InvokeEvent(e => e( sender, args));
         }
@@ -99,6 +105,7 @@ namespace episource.unblocker.hosting {
             this.remoteProxySponsor.Register(server);
             this.remoteProxy = server;
             
+            this.remoteProxy.ServerDyingEvent += this.OnServerDying;
             this.remoteProxy.ServerReadyEvent += this.OnServerReady;
             this.remoteProxy.TaskFailedEvent += this.OnTaskFailed;
             this.remoteProxy.TaskCanceledEvent += this.OnTaskCanceled;
@@ -131,6 +138,7 @@ namespace episource.unblocker.hosting {
         private /*protected virtual*/ void Dispose(bool disposing) {
             if (disposing) {
                 if (this.remoteProxy != null) {
+                    this.remoteProxy.ServerDyingEvent -= this.OnServerDying;
                     this.remoteProxy.ServerReadyEvent -= this.OnServerReady;
                     this.remoteProxy.TaskFailedEvent -= this.OnTaskFailed;
                     this.remoteProxy.TaskCanceledEvent -= this.OnTaskCanceled;

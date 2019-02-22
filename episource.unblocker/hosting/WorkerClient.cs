@@ -22,7 +22,8 @@ namespace episource.unblocker.hosting {
             Idle,
             Busy,
             Cleanup,
-            Dead
+            Dying,
+            Dead,
         }
         
         private readonly object stateLock = new object();
@@ -44,7 +45,8 @@ namespace episource.unblocker.hosting {
             }
 
             this.process.ProcessDeadEvent += this.OnProcessDead;
-            
+
+            this.serverProxy.ServerDyingEvent += this.OnServerDying;
             this.serverProxy.ServerReadyEvent += this.OnServerReady;
             this.serverProxy.TaskFailedEvent += this.OnRemoteTaskFailed;
             this.serverProxy.TaskCanceledEvent += this.OnRemoteTaskCanceled;
@@ -127,8 +129,8 @@ namespace episource.unblocker.hosting {
                 try {
                     this.serverProxy.Cancel(cancellationTimeout, forcedCancellationMode);
                 } catch (RemotingException) {
-                    if (forcedCancellationMode == ForcedCancellationMode.KillImmediately) {
-                        // worker killed itself: ignore!
+                    if (!this.process.IsAlive) {
+                        // worker killed itself or crashed: ignore!
                         return;
                     }
 
@@ -181,12 +183,28 @@ namespace episource.unblocker.hosting {
             this.OnCurrentStateChanged(nextState);
         }
 
+        private void OnServerDying(object sender, EventArgs e) {
+            const State nextState = State.Dying;
+            
+            lock (this.stateLock) {
+                this.state = nextState;
+            }
+            
+            // outside lock!
+            this.OnCurrentStateChanged(nextState);
+        }
+
         private void OnProcessDead(object sender, EventArgs e) {
             const State nextState = State.Dead;
             
             lock (this.stateLock) {
                 if (this.activeTcs != null) {
-                    this.activeTcs.TrySetCanceled();
+                    if (this.state == State.Dying) {
+                        this.activeTcs.TrySetCanceled();
+                    } else {
+                        this.activeTcs.TrySetException(new TaskCrashedException());
+                    }
+
                     this.activeTcs = null;
                 }
                 
@@ -225,7 +243,8 @@ namespace episource.unblocker.hosting {
                     this.state = State.Dead;
                     
                     this.process.ProcessDeadEvent -= this.OnProcessDead;
-                    
+
+                    this.serverProxy.ServerDyingEvent -= this.OnServerDying;
                     this.serverProxy.ServerReadyEvent -= this.OnServerReady;
                     this.serverProxy.TaskFailedEvent -= this.OnRemoteTaskFailed;
                     this.serverProxy.TaskCanceledEvent -= this.OnRemoteTaskCanceled;

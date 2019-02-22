@@ -45,6 +45,7 @@
     <Compile Include="hosting\HostingExtensions.cs" />
     <Compile Include="hosting\DebugMode.cs" />
     <Compile Include="hosting\RemoteTaskEventArgs.cs" />
+    <Compile Include="hosting\TaskCrashedException.cs" />
     <Compile Include="hosting\WorkerProcessRef.cs" />
     <Compile Include="hosting\WorkerServerHost.cs" />
     <Compile Include="hosting\InvocationRequest.cs" />
