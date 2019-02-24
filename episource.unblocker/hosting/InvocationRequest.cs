@@ -39,7 +39,11 @@ namespace episource.unblocker.hosting {
 
         public object Invoke(CancellationToken token) {
             var argsArray = this.Arguments.Select(arg => arg is CancellationTokenMarker ? token : arg).ToArray();
-            return this.Method.Invoke(this.Target, argsArray);
+            try {
+                return this.Method.Invoke(this.Target, argsArray);
+            } catch (TargetInvocationException e) {
+                throw e.InnerException;
+            }
         }
         
         public static InvocationRequest FromExpression<T>(Expression<Func<CancellationToken, T>> invocation) {
