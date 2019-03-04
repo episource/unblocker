@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.Remoting.Lifetime;
+using System.Runtime.Serialization;
 using System.Security;
 using System.Security.Policy;
 using System.Threading;
@@ -93,11 +94,14 @@ namespace episource.unblocker.hosting {
             }
 
             Task.Run(() => {
-                // the only way for the runner to throw is an forced shutdown of the appdomain!
-                var result = this.activeRunner.InvokeSynchronously(invocationRequest);
-
+                // this invocation can fail by to ways:
+                // 1. forced shutdown of appdomain - ignore silently
+                // 2. serialization exception related to type of result - pass to callee
                 try {
+                    var result = this.activeRunner.InvokeSynchronously(invocationRequest);
                     this.OnRunnerDone(result);
+                } catch (SerializationException e) {
+                    this.OnRunnerDone(new TaskFailedEventArgs(e));
                 } finally {
                     this.Cleanup(true);
                 }
