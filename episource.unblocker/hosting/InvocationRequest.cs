@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Runtime.Serialization;
 using System.Threading;
 
@@ -42,7 +43,8 @@ namespace episource.unblocker.hosting {
             try {
                 return this.Method.Invoke(this.Target, argsArray);
             } catch (TargetInvocationException e) {
-                throw e.InnerException;
+                ExceptionDispatchInfo.Capture(e.InnerException).Throw();
+                throw;
             }
         }
         
