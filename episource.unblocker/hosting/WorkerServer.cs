@@ -248,10 +248,20 @@ namespace episource.unblocker.hosting {
             // kill current worker in the most robust way possible!
             try {
                 this.ServerDyingEvent.InvokeEvent(e => e(this, EventArgs.Empty));
+            } catch (Exception ex) {
+                // continue on any possible remoting error
+                // most likely: remoting error
+                
+                Console.WriteLine(this.serverId + " Failed to announce suicide: " + ex.Message);
+                Console.WriteLine(ex.StackTrace);
+            }
+            
+            try {
+                
                 Process.GetCurrentProcess().Kill();
-            } catch (Exception exx) {
-                Console.WriteLine(this.serverId + " Failed to commit suicide: " + exx.Message);
-                Console.WriteLine(exx.StackTrace);
+            } catch (Exception ex) {
+                Console.WriteLine(this.serverId + " Failed to commit suicide: " + ex.Message);
+                Console.WriteLine(ex.StackTrace);
                 Console.WriteLine(this.serverId + " Client will have to take care of that!");
             }
         }
