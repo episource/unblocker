@@ -30,24 +30,30 @@ namespace episource.unblocker.tasks {
         }
 
         public void Cancel() {
-            var activeCts = this.cts;
+            CancellationTokenSource activeCts;
+            
+            do {
+                activeCts = this.cts;
+            } while (Interlocked.CompareExchange(ref this.cts, null, activeCts) != activeCts);
+            
             if (activeCts != null) {
                 activeCts.Cancel();
                 activeCts.Dispose();
             }
-            
         }
 
         public void Reset() {
             var newCts = new CancellationTokenSource();
             CancellationTokenSource activeCts;
+            
             do {
                 activeCts = this.cts;
-                if (activeCts != null) {
-                    activeCts.Cancel();
-                    activeCts.Dispose();
-                }
             } while (Interlocked.CompareExchange(ref this.cts, newCts, activeCts) != activeCts);
+            
+            if (activeCts != null) {
+                activeCts.Cancel();
+                activeCts.Dispose();
+            }
 
             this.ScheduleAction(newCts, newCts.Token);
         }
