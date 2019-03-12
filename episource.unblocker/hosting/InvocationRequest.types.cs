@@ -65,7 +65,12 @@ namespace episource.unblocker.hosting {
             private readonly IDictionary<string, string> nameToLocationMap;
 
             public AssemblyReferencePool(AppDomain hostDomain) {
-                this.nameToLocationMap = hostDomain.GetAssemblies().Where(a => !a.IsDynamic)
+                // note: it's possible for two assemblies with same name to be loaded (different location!)
+                // -> choose first
+                this.nameToLocationMap = hostDomain.GetAssemblies()
+                                                   .Where(a => !a.IsDynamic && File.Exists(a.Location))
+                                                   .GroupBy(a => a.FullName)
+                                                   .Select(g => g.First())
                                                    .ToDictionary(a => a.FullName, a => a.Location);
             }
 
