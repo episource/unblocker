@@ -8,6 +8,18 @@ namespace episource.unblocker.hosting {
         private sealed class TaskRunner : MarshalByRefObject {
             private readonly CancellationTokenSource cts = new CancellationTokenSource();
 
+            public void Setup() {
+                // resolve current assembly across load context
+                // important if current assembly was loaded from outside the default assembly search path
+                AppDomain.CurrentDomain.AssemblyResolve += (s, e) => {
+                    if (e.Name == typeof(TaskRunner).Assembly.FullName) {
+                        return typeof(TaskRunner).Assembly;
+                    }
+
+                    return null;
+                };
+            }
+            
             public void Cancel() {
                 this.cts.Cancel();
             }

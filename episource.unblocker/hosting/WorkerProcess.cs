@@ -1,18 +1,27 @@
 using System;
+using System.CodeDom.Compiler;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Reflection.Emit;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
+
+using Microsoft.CSharp;
+
 // ReSharper disable IdentifierTypo
 
 namespace episource.unblocker.hosting {
     public sealed class WorkerProcess : IDisposable {
         // ReSharper disable once MemberCanBePrivate.Global
         public static readonly TimeSpan StartupTimeout = new TimeSpan(0, 0, 10);
-
+        
         private readonly object processLock = new object();
         private bool disposed;
         private Process process;
@@ -71,15 +80,20 @@ namespace episource.unblocker.hosting {
                 var redirectConsole = debug != DebugMode.None;
                 this.process = new Process {
                     StartInfo = {
+                        #if useInstallUtil
+                        FileName = GetInstallUtilLocation(),
+                        #else
+                        FileName = bootstrapAssemblyPath.Value,
+                        #endif
+                        
                         CreateNoWindow = true,
                         UseShellExecute = false,
                         WorkingDirectory = typeof(WorkerServerHost).Assembly.Location + @"\..",
                         Arguments = string.Format(CultureInfo.InvariantCulture,
                             "/LogFile= /notransaction /ipcguid={0} /parentpid={1} /debug={2} {3}",
                             ipcguid, Process.GetCurrentProcess().Id, debug, typeof(WorkerServerHost).Assembly.Location),
-                        FileName = GetInstallUtilLocation(),
                         RedirectStandardOutput = redirectConsole,
-                        RedirectStandardError = redirectConsole,
+                        RedirectStandardError = redirectConsole
                     },
                     EnableRaisingEvents = true
                 };
@@ -137,18 +151,20 @@ namespace episource.unblocker.hosting {
             if (!this.disposed) {
                 this.disposed = true;
 
-                try {
-                    // Dispose locks; finalizer should not
-                    // ReSharper disable once InconsistentlySynchronizedField
-                    this.process.Kill();
-                } catch (InvalidOperationException) {
-                    // has already exited
-                }
+                if (this.process != null) {
+                    try {
+                        // Dispose locks; finalizer should not
+                        // ReSharper disable once InconsistentlySynchronizedField
+                        this.process.Kill();
+                    } catch (InvalidOperationException) {
+                        // has already exited
+                    }
 
-                // ReSharper disable once InconsistentlySynchronizedField
-                this.process.Dispose();
-                // ReSharper disable once InconsistentlySynchronizedField
-                this.process = null;
+                    // ReSharper disable once InconsistentlySynchronizedField
+                    this.process.Dispose();
+                    // ReSharper disable once InconsistentlySynchronizedField
+                    this.process = null;
+                }
             }
         }
 
@@ -159,5 +175,11 @@ namespace episource.unblocker.hosting {
         private static string GetInstallUtilLocation() {
             return Path.Combine(RuntimeEnvironment.GetRuntimeDirectory(), "InstallUtil.exe");
         }
+
+        #if !useInstallUtil
+        private static Lazy<string> bootstrapAssemblyPath = new Lazy<string>(WorkerServerHost.CreateBootstrapAssembly);
+        #endif
+        
     }
+
 }

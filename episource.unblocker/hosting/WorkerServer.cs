@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Drawing;
 using System.Globalization;
 using System.Runtime.Remoting.Lifetime;
 using System.Runtime.Serialization;
@@ -90,6 +91,8 @@ namespace episource.unblocker.hosting {
 
                 this.activeRunner = (TaskRunner) this.activeRunnerDomain.CreateInstanceFromAndUnwrap(
                     typeof(TaskRunner).Assembly.Location,typeof(TaskRunner).FullName);
+                this.activeRunner.Setup();
+                
                 this.proxyLifetimeSponsor.Register(this.activeRunner);
             }
 
