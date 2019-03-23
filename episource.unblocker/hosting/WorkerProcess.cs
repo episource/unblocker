@@ -134,7 +134,7 @@ namespace episource.unblocker.hosting {
                         StartupTimeout.TotalSeconds));
                 }
 
-                IWorkerServer server = WorkerServerClientSideProxy.ConnectToWorkerServer(ipcguid);
+                var server = WorkerServerClientSideProxy.ConnectToWorkerServer(ipcguid);
                 return new WorkerClient(this, server);
             }
         }

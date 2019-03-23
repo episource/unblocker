@@ -85,14 +85,38 @@ namespace episource.unblocker.hosting {
             
         }
 
-        private readonly ClientSponsor remoteProxySponsor = new ClientSponsor();
+        private readonly ClientSponsor proxySponsor = new ClientSponsor();
         private IWorkerServer remoteProxy;
+
+        private event EventHandler<TaskCanceledEventArgs> taskCanceledEvent;
+        public event EventHandler<TaskCanceledEventArgs> TaskCanceledEvent {
+            add { this.taskCanceledEvent += this.registerRemoteHandler(value); }
+            remove { this.taskCanceledEvent -= this.unregisterRemoteHandler(value); }
+        }
+
+        private event EventHandler<TaskSucceededEventArgs> taskSucceededEvent;
+        public event EventHandler<TaskSucceededEventArgs> TaskSucceededEvent {
+            add { this.taskSucceededEvent += this.registerRemoteHandler(value); }
+            remove { this.taskSucceededEvent -= this.unregisterRemoteHandler(value); }
+        }
+
+        private event EventHandler<TaskFailedEventArgs> taskFailedEvent;
+        public event EventHandler<TaskFailedEventArgs> TaskFailedEvent {
+            add { this.taskFailedEvent += this.registerRemoteHandler(value); }
+            remove { this.taskFailedEvent -= this.unregisterRemoteHandler(value); }
+        }
         
-        public event EventHandler<TaskCanceledEventArgs> TaskCanceledEvent;
-        public event EventHandler<TaskSucceededEventArgs> TaskSucceededEvent;
-        public event EventHandler<TaskFailedEventArgs> TaskFailedEvent;
-        public event EventHandler ServerDyingEvent;
-        public event EventHandler ServerReadyEvent;
+        private event EventHandler serverDyingEvent;
+        public event EventHandler ServerDyingEvent {
+            add { this.serverDyingEvent += this.registerRemoteHandler(value); }
+            remove { this.serverDyingEvent -= this.unregisterRemoteHandler(value); }
+        }
+        
+        private event EventHandler serverReadyEvent;
+        public event EventHandler ServerReadyEvent {
+            add { this.serverReadyEvent += this.registerRemoteHandler(value); }
+            remove { this.serverReadyEvent -= this.unregisterRemoteHandler(value); }
+        }
         
         public void Cancel(TimeSpan cancelTimeout, ForcedCancellationMode forcedCancellationMode) {
             this.remoteProxy.Cancel(cancelTimeout, forcedCancellationMode);
@@ -104,27 +128,27 @@ namespace episource.unblocker.hosting {
 
         // must be public to be bindable to remote events
         public void OnTaskCanceled(object sender, TaskCanceledEventArgs args) {
-            this.TaskCanceledEvent.InvokeEvent(e => e( sender, args));
+            this.taskCanceledEvent.InvokeEvent(e => e( sender, args));
         }
         
         // must be public to be bindable to remote events
         public void OnTaskSucceeded(object sender, TaskSucceededEventArgs args) {
-            this.TaskSucceededEvent.InvokeEvent(e => e( sender, args));
+            this.taskSucceededEvent.InvokeEvent(e => e( sender, args));
         }
         
         // must be public to be bindable to remote events
         public void OnTaskFailed(object sender, TaskFailedEventArgs args) {
-            this.TaskFailedEvent.InvokeEvent(e => e( sender, args));
+            this.taskFailedEvent.InvokeEvent(e => e( sender, args));
         }
         
         // must be public to be bindable to remote events
         public void OnServerDying(object sender, EventArgs args) {
-            this.ServerDyingEvent.InvokeEvent(e => e( sender, args));
+            this.serverDyingEvent.InvokeEvent(e => e( sender, args));
         }
         
         // must be public to be bindable to remote events
         public void OnServerReady(object sender, EventArgs args) {
-            this.ServerReadyEvent.InvokeEvent(e => e( sender, args));
+            this.serverReadyEvent.InvokeEvent(e => e( sender, args));
         }
         
         private void Connect(Guid ipcguid) {
@@ -136,7 +160,7 @@ namespace episource.unblocker.hosting {
                 string.Format(CultureInfo.InvariantCulture,
                     @"ipc://{0}/{1}", ipcguid, typeof(WorkerServer).FullName)
             );
-            this.remoteProxySponsor.Register(server);
+            this.proxySponsor.Register(server);
             this.remoteProxy = server;
             
             this.remoteProxy.ServerDyingEvent += this.OnServerDying;
@@ -146,6 +170,34 @@ namespace episource.unblocker.hosting {
             this.remoteProxy.TaskSucceededEvent += this.OnTaskSucceeded;
         }
 
+        private T registerRemoteHandler<T>(T handler) {
+            var handlerDelegate = handler as Delegate;
+            if (handlerDelegate == null) {
+                return handler;
+            }
+            
+            var targetRefObject = handlerDelegate.Target as MarshalByRefObject;
+            if (targetRefObject != null) {
+                this.proxySponsor.Register(targetRefObject);
+            }
+
+            return handler;
+        }
+
+        private T unregisterRemoteHandler<T>(T handler) {
+            var handlerDelegate = handler as Delegate;
+            if (handlerDelegate == null) {
+                return handler;
+            }
+            
+            var targetRefObject = handlerDelegate.Target as MarshalByRefObject;
+            if (targetRefObject != null) {
+                this.proxySponsor.Unregister(targetRefObject);
+            }
+
+            return handler;
+        }
+        
         // Proxy Domain loads current assembly in load from context.
         // This handler resolves it using the current context.
         private static Assembly ResolveCurrentAssemblyAcrossLoadContext(object sender, ResolveEventArgs e) {
@@ -176,7 +228,7 @@ namespace episource.unblocker.hosting {
                     this.remoteProxy.Dispose();
                     this.remoteProxy = null;
                     
-                    this.remoteProxySponsor.Close();
+                    this.proxySponsor.Close();
                 }
             }
             
