@@ -45,7 +45,7 @@ public static class Native
 var unblocker = new Unblocker();
 …
 var cts = new CancellationTokenSource();
-var sleepTask = unblocker.InvokeAsync(ct => Thread.Sleep(1000), cts.Token);
+var sleepTask = unblocker.InvokeAsync(ct => Native.Sleep(1000), cts.Token);
 
 Thread.Sleep(100);
 cts.Cancel();
