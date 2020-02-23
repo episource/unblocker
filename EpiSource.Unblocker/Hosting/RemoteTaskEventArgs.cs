@@ -1,6 +1,6 @@
 using System;
 
-namespace episource.unblocker.hosting {
+namespace EpiSource.Unblocker.Hosting {
     [Serializable]
     public sealed class TaskSucceededEventArgs : EventArgs {
         public TaskSucceededEventArgs(object result) {

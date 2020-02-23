@@ -8,8 +8,7 @@ using System.Runtime.ExceptionServices;
 using System.Runtime.Serialization;
 using System.Threading;
 
-
-namespace episource.unblocker.hosting {
+namespace EpiSource.Unblocker.Hosting {
     [Serializable]
     public sealed partial class InvocationRequest {
         private readonly MethodInfo method;

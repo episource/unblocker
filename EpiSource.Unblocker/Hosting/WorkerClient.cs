@@ -6,8 +6,7 @@ using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
 
-
-namespace episource.unblocker.hosting {
+namespace EpiSource.Unblocker.Hosting {
     [Serializable]
     public sealed class WorkerStateChangedEventArgs : EventArgs {
         public WorkerStateChangedEventArgs(WorkerClient.State state) {

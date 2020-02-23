@@ -2,7 +2,7 @@ using System;
 using System.Security.Permissions;
 using System.Security.Policy;
 
-namespace episource.unblocker.hosting {
+namespace EpiSource.Unblocker.Hosting {
     public static class HostingExtensions {
         public static StrongName GetStrongNameOfAssembly(this Type t) {
             var assemblyName = t.Assembly.GetName();

@@ -6,10 +6,10 @@ using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
 
-using episource.unblocker.hosting;
-using episource.unblocker.tasks;
+using EpiSource.Unblocker.Hosting;
+using EpiSource.Unblocker.Tasks;
 
-namespace episource.unblocker {
+namespace EpiSource.Unblocker {
     public sealed class Unblocker : IDisposable {
         private static readonly TimeSpan defaultStandbyDelay = TimeSpan.FromMilliseconds(10000);
         private static readonly TimeSpan builtinDefaultCancellationTimeout = TimeSpan.FromMilliseconds(50);

@@ -1,7 +1,7 @@
 using System;
 using System.Diagnostics;
 
-namespace episource.unblocker.hosting {
+namespace EpiSource.Unblocker.Hosting {
     public sealed class WorkerProcessRef {
         private Process workerProcess;
 

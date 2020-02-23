@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.Drawing;
 using System.Globalization;
 using System.Runtime.Remoting.Lifetime;
 using System.Runtime.Serialization;
@@ -9,7 +8,7 @@ using System.Security.Policy;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace episource.unblocker.hosting {
+namespace EpiSource.Unblocker.Hosting {
     public interface IWorkerServer : IDisposable {
         event EventHandler<TaskSucceededEventArgs> TaskSucceededEvent;
         event EventHandler<TaskCanceledEventArgs> TaskCanceledEvent;

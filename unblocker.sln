@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "episource.unblocker", "episource.unblocker\episource.unblocker.csproj", "{2569331C-8AE0-430B-A4BB-D69877DC8900}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EpiSource.Unblocker", "EpiSource.Unblocker\EpiSource.Unblocker.csproj", "{2569331C-8AE0-430B-A4BB-D69877DC8900}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

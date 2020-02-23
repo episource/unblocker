@@ -7,9 +7,9 @@
     <ProjectGuid>{2569331C-8AE0-430B-A4BB-D69877DC8900}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>episource.unblocker</RootNamespace>
-    <AssemblyName>episource.unblocker</AssemblyName>
-    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <RootNamespace>EpiSource.Unblocker</RootNamespace>
+    <AssemblyName>EpiSource.Unblocker</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <LangVersion>5</LangVersion>
   </PropertyGroup>
@@ -41,26 +41,26 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="hosting\ForcedCancellationMode.cs" />
-    <Compile Include="hosting\HostingExtensions.cs" />
-    <Compile Include="hosting\DebugMode.cs" />
-    <Compile Include="hosting\RemoteTaskEventArgs.cs" />
-    <Compile Include="hosting\TaskCrashedException.cs" />
-    <Compile Include="hosting\WorkerProcessRef.cs" />
-    <Compile Include="hosting\WorkerServerHost.cs" />
-    <Compile Include="hosting\InvocationRequest.cs" />
-    <Compile Include="hosting\InvocationRequest.types.cs">
+    <Compile Include="Hosting\ForcedCancellationMode.cs" />
+    <Compile Include="Hosting\HostingExtensions.cs" />
+    <Compile Include="Hosting\DebugMode.cs" />
+    <Compile Include="Hosting\RemoteTaskEventArgs.cs" />
+    <Compile Include="Hosting\TaskCrashedException.cs" />
+    <Compile Include="Hosting\WorkerProcessRef.cs" />
+    <Compile Include="Hosting\WorkerServerHost.cs" />
+    <Compile Include="Hosting\InvocationRequest.cs" />
+    <Compile Include="Hosting\InvocationRequest.types.cs">
       <DependentUpon>InvocationRequest.cs</DependentUpon>
     </Compile>
-    <Compile Include="hosting\WorkerClient.cs" />
-    <Compile Include="hosting\WorkerServerClientSideProxy.cs" />
-    <Compile Include="hosting\WorkerProcess.cs" />
-    <Compile Include="hosting\WorkerServer.cs" />
-    <Compile Include="hosting\WorkerServer.types.cs">
+    <Compile Include="Hosting\WorkerClient.cs" />
+    <Compile Include="Hosting\WorkerServerClientSideProxy.cs" />
+    <Compile Include="Hosting\WorkerProcess.cs" />
+    <Compile Include="Hosting\WorkerServer.cs" />
+    <Compile Include="Hosting\WorkerServer.types.cs">
       <DependentUpon>WorkerServer.cs</DependentUpon>
     </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="tasks\CountdownTask.cs" />
+    <Compile Include="Tasks\CountdownTask.cs" />
     <Compile Include="Unblocker.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

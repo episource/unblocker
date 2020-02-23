@@ -1,4 +1,4 @@
-namespace episource.unblocker.hosting {
+namespace EpiSource.Unblocker.Hosting {
     public enum DebugMode {
         None,
         Console,

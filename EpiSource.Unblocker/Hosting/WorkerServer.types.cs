@@ -1,8 +1,7 @@
 using System;
 using System.Threading;
 
-
-namespace episource.unblocker.hosting {
+namespace EpiSource.Unblocker.Hosting {
     public partial class WorkerServer {
         // may be used for one invocation only!
         private sealed class TaskRunner : MarshalByRefObject {

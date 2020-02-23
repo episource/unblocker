@@ -1,4 +1,4 @@
-namespace episource.unblocker.hosting {
+namespace EpiSource.Unblocker.Hosting {
     public enum ForcedCancellationMode {
         /// <summary>
         /// The task is marked cancelled if it didn't respond to the cancellation request within the given timeout.

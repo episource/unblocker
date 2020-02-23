@@ -5,7 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization.Formatters.Binary;
 
-namespace episource.unblocker.hosting {
+namespace EpiSource.Unblocker.Hosting {
     public partial class InvocationRequest {
         [Serializable]
         public sealed class PortableInvocationRequest {

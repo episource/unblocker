@@ -1,9 +1,6 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Runtime.Remoting;
 using System.Runtime.Remoting.Channels;
@@ -11,7 +8,7 @@ using System.Runtime.Remoting.Channels.Ipc;
 using System.Runtime.Remoting.Lifetime;
 using System.Security;
 
-namespace episource.unblocker.hosting {
+namespace EpiSource.Unblocker.Hosting {
     /// Limit remoting to specific appdomain: Channels cannot be unregistered and ensures that other services
     /// within the application using this library are not exposed by the worker channel.
     public sealed class WorkerServerClientSideProxy : MarshalByRefObject, IWorkerServer {

@@ -1,23 +1,15 @@
 using System;
-using System.CodeDom.Compiler;
-using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Reflection.Emit;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
-
-using Microsoft.CSharp;
 
 // ReSharper disable IdentifierTypo
 
-namespace episource.unblocker.hosting {
+namespace EpiSource.Unblocker.Hosting {
     public sealed class WorkerProcess : IDisposable {
         // ReSharper disable once MemberCanBePrivate.Global
         public static readonly TimeSpan StartupTimeout = new TimeSpan(0, 0, 10);

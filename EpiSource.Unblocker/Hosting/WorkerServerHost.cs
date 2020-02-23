@@ -3,6 +3,8 @@ using System.CodeDom.Compiler;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.ComponentModel;
+using System.Configuration.Install;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -16,14 +18,11 @@ using System.Threading;
 
 using Microsoft.CSharp;
 
-namespace episource.unblocker.hosting {
+namespace EpiSource.Unblocker.Hosting {
     /// <summary>This is the entry point of the host process.
     /// To execute a class library the InstallUtil.exe application included with every .net framework installation
     /// is abused.</summary>
     #if useInstallUtil
-    using System.ComponentModel;
-    using System.Configuration.Install;
-    
     [RunInstaller(true)]
     public sealed class WorkerServerHost : Installer {
     
