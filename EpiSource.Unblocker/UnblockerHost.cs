@@ -10,7 +10,7 @@ using EpiSource.Unblocker.Hosting;
 using EpiSource.Unblocker.Tasks;
 
 namespace EpiSource.Unblocker {
-    public sealed class Unblocker : IDisposable {
+    public sealed class UnblockerHost : IDisposable {
         private static readonly TimeSpan defaultStandbyDelay = TimeSpan.FromMilliseconds(10000);
         private static readonly TimeSpan builtinDefaultCancellationTimeout = TimeSpan.FromMilliseconds(50);
 
@@ -26,7 +26,7 @@ namespace EpiSource.Unblocker {
 
         private volatile bool disposed;
 
-        public Unblocker(
+        public UnblockerHost(
             int maxIdleWorkers = 1, int? maxWorkers = null, TimeSpan? standbyDelay = null,
             TimeSpan? defaultCancellationTimeout = null, DebugMode debug = DebugMode.None
         ) {
