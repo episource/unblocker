@@ -4,7 +4,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Configuration.Install;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -24,7 +23,7 @@ namespace EpiSource.Unblocker.Hosting {
     /// is abused.</summary>
     #if useInstallUtil
     [RunInstaller(true)]
-    public sealed class WorkerServerHost : Installer {
+    public sealed class WorkerServerHost : System.Configuration.Install.Installer {
     
         public override void Install(IDictionary stateSaver) {
             Start(this.Context.Parameters);
