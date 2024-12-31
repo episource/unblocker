@@ -104,7 +104,20 @@ namespace EpiSource.Unblocker.Hosting {
 
                 // Start process and wait for it to be ready
                 var waitForProcessReadyHandle = CreateWaitForProcessReadyHandle(ipcguid);
-                this.process.Start();
+
+                try {
+                    this.process.Start();
+                } catch (Win32Exception e) {
+                    // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/18d8fbe8-a967-4f1c-ae50-99ca8e491d2d
+                    const int ERROR_VIRUS_INFECTED = 0xE1;
+                    const int ERROR_VIRUS_DELETED = 0xE2;
+                    
+                    if (e.NativeErrorCode == ERROR_VIRUS_INFECTED || e.NativeErrorCode == ERROR_VIRUS_DELETED) {
+                        throw new DeniedByVirusScannerFalsePositive(e);
+                    } 
+                
+                    throw;
+                }
 
                 if (redirectConsole) {
                     this.process.BeginOutputReadLine();

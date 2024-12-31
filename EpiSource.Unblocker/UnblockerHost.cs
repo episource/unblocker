@@ -131,7 +131,13 @@ namespace EpiSource.Unblocker {
                 if (this.idleClients.Count > 0) {
                     nextClient = this.idleClients.Dequeue();
                 } else {
-                    nextClient = new WorkerProcess().Start(this.debugMode);
+                    try {
+                        nextClient = new WorkerProcess().Start(this.debugMode);
+                    } catch {
+                        this.waitForWorkerSemaphore.Release();
+                        throw;
+                    }
+                    
                     nextClient.CurrentStateChangedEvent += this.OnWorkerCurrentStateChanged;
                 }
                 this.busyClients.AddLast(nextClient);
