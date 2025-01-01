@@ -60,6 +60,16 @@ namespace EpiSource.Unblocker.Hosting {
                 return this.state;
             }
         }
+
+        public WorkerClient EnsureAlive() {
+            if (this.state == State.Dead) {
+                return null;
+            }
+            if (this.process.IsAlive) return this;
+            
+            this.OnProcessDead(this, EventArgs.Empty);
+            return null;
+        }
         
         public async Task<T> InvokeRemotely<T>(
             Expression<Func<CancellationToken, T>> invocation, CancellationToken ct,

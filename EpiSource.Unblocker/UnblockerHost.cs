@@ -127,10 +127,13 @@ namespace EpiSource.Unblocker {
             lock (this.stateLock) {
                 this.RecoverWorkers();
 
-                WorkerClient nextClient;
-                if (this.idleClients.Count > 0) {
-                    nextClient = this.idleClients.Dequeue();
-                } else {
+                WorkerClient nextClient = null;
+
+                while (nextClient == null && this.idleClients.Count > 0) {
+                    nextClient = this.idleClients.Dequeue().EnsureAlive();
+                }
+                
+                if (nextClient == null) {
                     try {
                         nextClient = new WorkerProcess().Start(this.debugMode);
                     } catch {
@@ -180,6 +183,8 @@ namespace EpiSource.Unblocker {
                     while (curNode != null) {
                         var nextNode = curNode.Next;
                         var worker = curNode.Value;
+                        
+                        worker.EnsureAlive();
 
                         switch (worker.CurrentState) {
                             case WorkerClient.State.Idle:
