@@ -109,11 +109,15 @@ namespace EpiSource.Unblocker.Hosting {
                     this.process.Start();
                 } catch (Win32Exception e) {
                     // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/18d8fbe8-a967-4f1c-ae50-99ca8e491d2d
+                    const int ERROR_FILE_NOT_FOUND = 0x02;
                     const int ERROR_VIRUS_INFECTED = 0xE1;
                     const int ERROR_VIRUS_DELETED = 0xE2;
-                    
+
+                    if (e.NativeErrorCode == ERROR_FILE_NOT_FOUND) {
+                        throw new FileNotFoundException("Unblocker worker executable not found: " + this.process.StartInfo.FileName, this.process.StartInfo.FileName);
+                    }
                     if (e.NativeErrorCode == ERROR_VIRUS_INFECTED || e.NativeErrorCode == ERROR_VIRUS_DELETED) {
-                        throw new DeniedByVirusScannerFalsePositive(e);
+                        throw new DeniedByVirusScannerFalsePositive(e, this.process.StartInfo.FileName);
                     } 
                 
                     throw;
