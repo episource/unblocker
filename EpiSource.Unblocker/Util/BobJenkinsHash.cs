@@ -9,11 +9,11 @@ namespace EpiSource.Unblocker.Util {
     public sealed class BobJenkinsOneAtATimeHash {
         private uint preAvalancheHash = 0;
 
-        public void AppendString(string s) {
-            this.AppendBytes(UnicodeEncoding.Unicode.GetBytes(s));
+        public BobJenkinsOneAtATimeHash AppendString(string s) {
+            return this.AppendBytes(UnicodeEncoding.Unicode.GetBytes(s));
         }
 
-        public void AppendBytes(byte[] bytes) {
+        public BobJenkinsOneAtATimeHash AppendBytes(byte[] bytes) {
             foreach (byte b in bytes) {
                 unchecked {
                     this.preAvalancheHash += b;
@@ -21,6 +21,7 @@ namespace EpiSource.Unblocker.Util {
                     this.preAvalancheHash ^= (this.preAvalancheHash >> 6);
                 }
             }
+            return this;
         }
 
         public uint GetHash() {
@@ -31,6 +32,10 @@ namespace EpiSource.Unblocker.Util {
                 hash += (hash << 15);
                 return hash;
             }
+        }
+
+        public static uint CalculateHash(string s) {
+            return new BobJenkinsOneAtATimeHash().AppendString(s).GetHash();
         }
     }
 }

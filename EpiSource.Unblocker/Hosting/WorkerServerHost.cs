@@ -113,20 +113,7 @@ namespace EpiSource.Unblocker.Hosting {
         }
         
         internal static string CreateBootstrapAssembly() {
-            var knownAssembliesBuilder = new StringBuilder();
-            var knownAssembliesList = AppDomain.CurrentDomain.GetAssemblies()
-                                               .Where(a => !a.IsDynamic && File.Exists(a.Location))
-                                               .GroupBy(a => a.FullName)
-                                               .Select(g => g.First())
-                                               .ToList();
-            foreach (var a in knownAssembliesList) {
-                knownAssembliesBuilder.AppendLine(String.Format(CultureInfo.InvariantCulture,
-                    "knownAssemblies[\"{0}\"]=@\"{1}\";", a.FullName, a.Location));
-            }
-
             var hostAssembly = typeof(WorkerServerHost).Assembly;
-            var hostAssemblyName = hostAssembly.GetName();
-            var hostAssemblyLocation = hostAssembly.Location;
             var hostClassName = typeof(WorkerServerHost).FullName;
 
             Expression<Action<string[]>> startMethod = args => WorkerServerHost.Start(args);
@@ -145,8 +132,6 @@ namespace EpiSource.Unblocker.Hosting {
             
             var source = @"
 using System;
-using System.Collections.Generic;
-using System.Collections.Specialized;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
@@ -168,34 +153,26 @@ using System.Runtime.InteropServices;
 namespace EpiSource.Unblocker.Hosting {
     public static class Bootstrapper {
 
-        public static void Main(string[] args) {
-            IDictionary<string, string> knownAssemblies = new Dictionary<string, string>();
-            " + knownAssembliesBuilder + @"
-
+        static Bootstrapper() {
             AppDomain.CurrentDomain.AssemblyResolve += (s, e) => {
-                if (knownAssemblies.ContainsKey(e.Name)) {
-                    return Assembly.LoadFile(knownAssemblies[e.Name]);
+                if (e.Name == @""" + hostAssembly.FullName + @""") {
+                    return Assembly.LoadFile(@""" + hostAssembly.Location + @""");
                 }
 
                 return null;
             };
-
-            Assembly hostAssembly = Assembly.LoadFile(@""" + hostAssemblyLocation + @""");
-            Type hostType = hostAssembly.GetType(""" + hostClassName + @""");
-            MethodInfo startMethod = hostType.GetMethod(""" + hostStartName + @""", new[] {typeof(IEnumerable<string>)});
-            startMethod.Invoke(null, new [] { args });
         }
-        
+
+        public static void Main(string[] args) {
+            " + hostClassName + "." + hostStartName + @"(args);
+        }
     }
 }
              ";
 
-            var hashFunction = new BobJenkinsOneAtATimeHash();
-            hashFunction.AppendString(source);
-            hashFunction.AppendString(hostAssemblyName.FullName);
-            var hashString = String.Format("0x{0:x8}", hashFunction.GetHash());
             
-            // encode variant hash in bootstrapper assembly configuration attribute
+            // encode variant hash in bootstrapper assembly attributes
+            var hashString = String.Format("0x{0:x8}", BobJenkinsOneAtATimeHash.CalculateHash(source));
             source = source.Replace("[assembly: AssemblyConfiguration(\"\")]", "[assembly: AssemblyConfiguration(\"0x" + hashString + "\")]")
                            .RegexReplace(@"(?<=\[assembly: AssemblyInformationalVersion\(""[^""]*)(?="")", "+" + hashString);
             
@@ -205,7 +182,7 @@ namespace EpiSource.Unblocker.Hosting {
                 GenerateInMemory = false,
                 GenerateExecutable = true,
                 MainClass = "EpiSource.Unblocker.Hosting.Bootstrapper",
-                ReferencedAssemblies = { "System.dll" }
+                ReferencedAssemblies = { "System.dll", hostAssembly.Location }
             };
 
             var result = provider.CompileAssemblyFromSource(opts, source);
