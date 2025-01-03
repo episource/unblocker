@@ -19,6 +19,30 @@ namespace EpiSource.Unblocker.Hosting {
         private readonly SemaphoreSlim semaphoreOneAtATime = new SemaphoreSlim(1, 1);
         private string assemblyPath = null;
 
+        private static Version unblockerVersion = null;
+        // Hook to inject version information if embedded into foreign assembly
+        public static Version UnblockerVersion {
+            get {
+                return unblockerVersion ?? typeof(WorkerServerHost).Assembly.GetName().Version;
+            }
+            set {
+                unblockerVersion = value;
+            }
+        }
+
+        private static string unblockerCopyright = null;
+        
+        // Hook to inject version information if embedded into foreign assembly
+        public static string UnblockerCopyright {
+            get {
+                return unblockerCopyright ?? typeof(WorkerServerHost).Assembly.GetCustomAttribute<AssemblyCopyrightAttribute>().Copyright;
+            }
+            set {
+                unblockerCopyright = value;
+            }
+        }
+        
+
         private BootstrapAssemblyProvider() {
             
         }
@@ -55,16 +79,13 @@ namespace EpiSource.Unblocker.Hosting {
 
             Expression<Action<string[]>> startMethod = args => WorkerServerHost.Start(args);
             var hostStartName = (startMethod.Body as MethodCallExpression).Method.Name;
-
-            Version unblockerVersion;
-            string unblockerCopyright;
-            var assemblyInfoSource = hostAssembly.GetManifestResourceStream("EpiSource.Unblocker.Properties.AssemblyInfo.cs").ReadAllTextAndClose();
-            if (assemblyInfoSource != null) {
-                unblockerVersion = Version.Parse(Regex.Match(assemblyInfoSource, @"^\[assembly: AssemblyVersion\(""([^""]+)", RegexOptions.Multiline).Groups[1].Value);
-                unblockerCopyright = Regex.Match(assemblyInfoSource, @"^\[assembly: AssemblyCopyright\(""([^""]+)", RegexOptions.Multiline).Groups[1].Value;
-            } else {
-                unblockerVersion = hostAssembly.GetName().Version;
-                unblockerCopyright = hostAssembly.GetCustomAttribute<AssemblyCopyrightAttribute>().Copyright;
+            
+            var unblockerVersion = hostAssembly.GetName().Version; 
+            var unblockerCopyright = hostAssembly.GetCustomAttribute<AssemblyCopyrightAttribute>().Copyright;
+            
+            var unblockerTitle = "EpiSource.Unblocker.Bootstrap";
+            if (hostAssembly.GetName().Name != "EpiSource.Unblocker") {
+                unblockerTitle += "@" + hostAssembly.GetName().Name;
             }
             
             var source = @"
@@ -72,7 +93,7 @@ using System;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
-[assembly: AssemblyTitle(""EpiSource.Unblocker.Bootstrap"")]
+[assembly: AssemblyTitle(""" + unblockerTitle + @""")]
 [assembly: AssemblyDescription(""Dynamically crated worker process entrypoint for EpiSource.Unblocker."")]
 [assembly: AssemblyConfiguration("""")] // placeholder for bootstrapper variant hash
 [assembly: AssemblyCompany(""EpiSource"")]
@@ -115,7 +136,7 @@ namespace EpiSource.Unblocker.Hosting {
             
             var provider = new CSharpCodeProvider();
             var opts = new CompilerParameters {
-                OutputAssembly = Path.Combine(Path.GetTempPath(), String.Format("EpiSource.Unblocker.Bootstrap_{0}+{1}.exe", unblockerVersion, hashString)),
+                OutputAssembly = Path.Combine(Path.GetTempPath(), String.Format("{0}_{1}+{2}.exe", unblockerTitle, unblockerVersion, hashString)),
                 GenerateInMemory = false,
                 GenerateExecutable = true,
                 MainClass = "EpiSource.Unblocker.Hosting.Bootstrapper",
