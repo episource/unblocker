@@ -85,20 +85,20 @@ namespace EpiSource.Unblocker.Hosting {
         private readonly ClientSponsor proxySponsor = new ClientSponsor();
         private IWorkerServer remoteProxy;
 
-        private event EventHandler<TaskCanceledEventArgs> taskCanceledEvent;
-        public event EventHandler<TaskCanceledEventArgs> TaskCanceledEvent {
+        private event EventHandler<PortableEventArgs<TaskCanceledEventArgs>> taskCanceledEvent;
+        public event EventHandler<PortableEventArgs<TaskCanceledEventArgs>> TaskCanceledEvent {
             add { this.taskCanceledEvent += this.registerRemoteHandler(value); }
             remove { this.taskCanceledEvent -= this.unregisterRemoteHandler(value); }
         }
 
-        private event EventHandler<TaskSucceededEventArgs> taskSucceededEvent;
-        public event EventHandler<TaskSucceededEventArgs> TaskSucceededEvent {
+        private event EventHandler<PortableEventArgs<TaskSucceededEventArgs>> taskSucceededEvent;
+        public event EventHandler<PortableEventArgs<TaskSucceededEventArgs>> TaskSucceededEvent {
             add { this.taskSucceededEvent += this.registerRemoteHandler(value); }
             remove { this.taskSucceededEvent -= this.unregisterRemoteHandler(value); }
         }
 
-        private event EventHandler<TaskFailedEventArgs> taskFailedEvent;
-        public event EventHandler<TaskFailedEventArgs> TaskFailedEvent {
+        private event EventHandler<PortableEventArgs<TaskFailedEventArgs>> taskFailedEvent;
+        public event EventHandler<PortableEventArgs<TaskFailedEventArgs>> TaskFailedEvent {
             add { this.taskFailedEvent += this.registerRemoteHandler(value); }
             remove { this.taskFailedEvent -= this.unregisterRemoteHandler(value); }
         }
@@ -124,17 +124,17 @@ namespace EpiSource.Unblocker.Hosting {
         }
 
         // must be public to be bindable to remote events
-        public void OnTaskCanceled(object sender, TaskCanceledEventArgs args) {
+        public void OnTaskCanceled(object sender, PortableEventArgs<TaskCanceledEventArgs> args) {
             this.taskCanceledEvent.InvokeEvent(e => e( sender, args));
         }
         
         // must be public to be bindable to remote events
-        public void OnTaskSucceeded(object sender, TaskSucceededEventArgs args) {
+        public void OnTaskSucceeded(object sender, PortableEventArgs<TaskSucceededEventArgs> args) {
             this.taskSucceededEvent.InvokeEvent(e => e( sender, args));
         }
         
         // must be public to be bindable to remote events
-        public void OnTaskFailed(object sender, TaskFailedEventArgs args) {
+        public void OnTaskFailed(object sender, PortableEventArgs<TaskFailedEventArgs> args) {
             this.taskFailedEvent.InvokeEvent(e => e( sender, args));
         }
         

@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 
 // ReSharper disable IdentifierTypo
 
@@ -56,7 +57,7 @@ namespace EpiSource.Unblocker.Hosting {
         public Process Process {
             get { return this.process; }
         }
-
+        
         [SuppressMessage("ReSharper", "StringLiteralTypo")]
         public WorkerClient Start(DebugMode debug = DebugMode.None) {
             lock (this.processLock) {
@@ -75,7 +76,7 @@ namespace EpiSource.Unblocker.Hosting {
                         #if useInstallUtil
                         FileName = GetInstallUtilLocation(),
                         #else
-                        FileName = bootstrapAssemblyPath.Value,
+                        FileName = BootstrapAssemblyProvider.Instance.EnsureAvailable(),
                         #endif
                         
                         CreateNoWindow = true,
@@ -106,6 +107,7 @@ namespace EpiSource.Unblocker.Hosting {
                 var waitForProcessReadyHandle = CreateWaitForProcessReadyHandle(ipcguid);
 
                 try {
+                    AppDomain.CurrentDomain.ProcessExit += this.OnParentProcessExit;
                     this.process.Start();
                 } catch (Win32Exception e) {
                     // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-erref/18d8fbe8-a967-4f1c-ae50-99ca8e491d2d
@@ -147,6 +149,12 @@ namespace EpiSource.Unblocker.Hosting {
                 return new WorkerClient(this, server);
             }
         }
+
+        private void OnParentProcessExit(object sender, EventArgs e) {
+            this.Dispose();
+        }
+        
+        #region IDisposable
         
         public void Dispose() {
             lock (this.processLock) {
@@ -159,6 +167,8 @@ namespace EpiSource.Unblocker.Hosting {
         private /*protected virtual*/ void Dispose(bool disposing) {
             if (!this.disposed) {
                 this.disposed = true;
+
+                AppDomain.CurrentDomain.ProcessExit -= this.OnParentProcessExit;
 
                 if (this.process != null) {
                     try {
@@ -181,14 +191,12 @@ namespace EpiSource.Unblocker.Hosting {
             this.Dispose(false);
         }
         
+        #endregion
+        
         private static string GetInstallUtilLocation() {
             return Path.Combine(RuntimeEnvironment.GetRuntimeDirectory(), "InstallUtil.exe");
         }
 
-        #if !useInstallUtil
-        private static Lazy<string> bootstrapAssemblyPath = new Lazy<string>(WorkerServerHost.CreateBootstrapAssembly);
-        #endif
-        
     }
 
 }

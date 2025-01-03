@@ -10,9 +10,9 @@ using System.Threading.Tasks;
 
 namespace EpiSource.Unblocker.Hosting {
     public interface IWorkerServer : IDisposable {
-        event EventHandler<TaskSucceededEventArgs> TaskSucceededEvent;
-        event EventHandler<TaskCanceledEventArgs> TaskCanceledEvent;
-        event EventHandler<TaskFailedEventArgs> TaskFailedEvent;
+        event EventHandler<PortableEventArgs<TaskSucceededEventArgs>> TaskSucceededEvent;
+        event EventHandler<PortableEventArgs<TaskCanceledEventArgs>> TaskCanceledEvent;
+        event EventHandler<PortableEventArgs<TaskFailedEventArgs>> TaskFailedEvent;
         event EventHandler ServerDyingEvent;
         event EventHandler ServerReadyEvent;
 
@@ -30,9 +30,9 @@ namespace EpiSource.Unblocker.Hosting {
         private volatile AppDomain activeRunnerDomain;
         private volatile CancellationTokenSource cleanupTaskCts;
 
-        public event EventHandler<TaskSucceededEventArgs> TaskSucceededEvent;
-        public event EventHandler<TaskCanceledEventArgs> TaskCanceledEvent;
-        public event EventHandler<TaskFailedEventArgs> TaskFailedEvent;
+        public event EventHandler<PortableEventArgs<TaskSucceededEventArgs>> TaskSucceededEvent;
+        public event EventHandler<PortableEventArgs<TaskCanceledEventArgs>> TaskCanceledEvent;
+        public event EventHandler<PortableEventArgs<TaskFailedEventArgs>> TaskFailedEvent;
         public event EventHandler ServerDyingEvent;
         public event EventHandler ServerReadyEvent;
 
@@ -104,6 +104,8 @@ namespace EpiSource.Unblocker.Hosting {
                     this.OnRunnerDone(result);
                 } catch (SerializationException e) {
                     this.OnRunnerDone(new TaskFailedEventArgs(e));
+                } catch (Exception e) {
+                    Console.WriteLine("Ignored exception during invocation: " + e);
                 } finally {
                     this.Cleanup(true);
                 }
@@ -116,24 +118,33 @@ namespace EpiSource.Unblocker.Hosting {
 
         private void OnRunnerDone(EventArgs result) {
             if (result is TaskSucceededEventArgs) {
-                this.OnRunnerDone(this.TaskSucceededEvent,
-                    e => e(this, (TaskSucceededEventArgs) result),
-                    "SUCCESS");
+                result = ((TaskSucceededEventArgs) result).ToPortable();
             } else if (result is TaskCanceledEventArgs) {
-                this.OnRunnerDone(this.TaskCanceledEvent,
-                    e => e(this, (TaskCanceledEventArgs) result),
-                    "CANCELED");
+                result = ((TaskCanceledEventArgs) result).ToPortable();
             } else if (result is TaskFailedEventArgs) {
-                var failedArgs = result as TaskFailedEventArgs;
-                var ex = failedArgs.Exception;
-
+                result = ((TaskFailedEventArgs) result).ToPortable();
+            }
+            
+            if (result is PortableEventArgs<TaskSucceededEventArgs>) {
+                this.OnRunnerDone(this.TaskSucceededEvent,
+                    e => e(this, (PortableEventArgs<TaskSucceededEventArgs>) result),
+                    "SUCCESS");
+            } else if (result is PortableEventArgs<TaskCanceledEventArgs>) {
+                this.OnRunnerDone(this.TaskCanceledEvent,
+                    e => e(this, (PortableEventArgs<TaskCanceledEventArgs>) result),
+                    "CANCELED");
+            } else if (result is PortableEventArgs<TaskFailedEventArgs>) {
                 var msg = "EXCEPTION";
-                if (ex != null) {
-                    msg += " " + ex.GetType() + " - " + ex.Message;
-                }
+                try {
+                    var failedArgs = ((PortableEventArgs<TaskFailedEventArgs>) result).Deserialize();
+                    var ex = failedArgs.Exception;
+                    if (ex != null) {
+                        msg += " " + ex.GetType() + " - " + ex.Message;
+                    }
+                } catch { /* Deserialize might fail due to missing types. */}
 
                 this.OnRunnerDone(this.TaskFailedEvent,
-                    e => e(this, failedArgs), msg);
+                    e => e(this, (PortableEventArgs<TaskFailedEventArgs>)result), msg);
             } else {
                 throw new ArgumentException("Unknown result type.", "result");
             }
@@ -203,7 +214,7 @@ namespace EpiSource.Unblocker.Hosting {
 
                 if (asyncCancellation) {
                     this.TaskCanceledEvent.InvokeEvent(
-                        e => e(this, new TaskCanceledEventArgs(false)));
+                        e => e(this, new TaskCanceledEventArgs(false).ToPortable()));
                 }
             }
             
@@ -224,7 +235,7 @@ namespace EpiSource.Unblocker.Hosting {
                 
                 if (!cleanShutdown && !asyncCancellation) {
                     this.TaskCanceledEvent.InvokeEvent(
-                        e => e(this, new TaskCanceledEventArgs(false)));
+                        e => e(this, new TaskCanceledEventArgs(false).ToPortable()));
                 }
 
                 lock (this.stateLock) {

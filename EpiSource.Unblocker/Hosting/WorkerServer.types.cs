@@ -3,6 +3,7 @@ using System.Threading;
 
 namespace EpiSource.Unblocker.Hosting {
     public partial class WorkerServer {
+
         // may be used for one invocation only!
         private sealed class TaskRunner : MarshalByRefObject {
             private readonly CancellationTokenSource cts = new CancellationTokenSource();
@@ -30,15 +31,15 @@ namespace EpiSource.Unblocker.Hosting {
                 try {
                     this.cts.Token.ThrowIfCancellationRequested();
                     var result = portableInvocationRequest.ToInvocationRequest().Invoke(this.cts.Token);
-                    return new TaskSucceededEventArgs(result);
+                    return new TaskSucceededEventArgs(result).ToPortable();
                 } catch (OperationCanceledException e) {
                     if (e.CancellationToken == this.cts.Token) {
-                        return new TaskCanceledEventArgs(true);
+                        return new TaskCanceledEventArgs(true).ToPortable();
                     } 
                         
-                    return new TaskFailedEventArgs(e);
+                    return new TaskFailedEventArgs(e).ToPortable();
                 } catch (Exception e) {
-                    return new TaskFailedEventArgs(e);
+                    return new TaskFailedEventArgs(e).ToPortable();
                 }
             }
         }

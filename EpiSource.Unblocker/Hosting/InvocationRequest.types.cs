@@ -4,6 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization.Formatters.Binary;
+using System.Text;
+
+using EpiSource.Unblocker.Util;
 
 namespace EpiSource.Unblocker.Hosting {
     public partial class InvocationRequest {
@@ -11,7 +14,7 @@ namespace EpiSource.Unblocker.Hosting {
         public sealed class PortableInvocationRequest {
             // Actual invocation request stored as binary data to prevent remoting framework from automatically
             // deserializing it: This required loading all referenced assemblies in the AppDomain running the server
-            // application. However, assemblies should be loaded in a task specific  AppDomain.
+            // application. However, assemblies should be loaded in a task specific AppDomain.
             private readonly byte[] serializedInvocationRequest;
 
             private readonly AssemblyReferencePool referencePool;
@@ -23,7 +26,7 @@ namespace EpiSource.Unblocker.Hosting {
                     throw new ArgumentNullException("request");
                 }
                 
-                this.serializedInvocationRequest = Serialize(request);
+                this.serializedInvocationRequest = request.SerializeToBinary();
                 this.referencePool = new AssemblyReferencePool(AppDomain.CurrentDomain);
                 this.methodName = request.Method.DeclaringType.FullName + "." + request.Method.Name;
                 this.applicationBase = AppDomain.CurrentDomain.BaseDirectory;
@@ -40,23 +43,10 @@ namespace EpiSource.Unblocker.Hosting {
             public InvocationRequest ToInvocationRequest() {
                 this.referencePool.AttachToDomain(AppDomain.CurrentDomain);
                 try {
-                    return Deserialize(this.serializedInvocationRequest);
+                    return this.serializedInvocationRequest.DeserializeFromBinary<InvocationRequest>();
                 } finally {
                     this.referencePool.DetachFromDomain(AppDomain.CurrentDomain);
                 }
-            }
-
-            private static byte[] Serialize(InvocationRequest request) {
-                var binFormatter = new BinaryFormatter();
-                var bufferStream = new MemoryStream();
-                binFormatter.Serialize(bufferStream, request);
-                return bufferStream.ToArray();
-            }
-
-            private static InvocationRequest Deserialize(byte[] serializedRequest) {
-                var binFormatter = new BinaryFormatter();
-                var serializedStream = new MemoryStream(serializedRequest);
-                return (InvocationRequest) binFormatter.Deserialize(serializedStream);
             }
         }
 

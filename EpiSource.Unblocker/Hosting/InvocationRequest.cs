@@ -8,6 +8,10 @@ using System.Runtime.ExceptionServices;
 using System.Runtime.Serialization;
 using System.Threading;
 
+using EpiSource.KeePass.Ekf.Crypto;
+
+using KeePassLib.Keys;
+
 namespace EpiSource.Unblocker.Hosting {
     [Serializable]
     public sealed partial class InvocationRequest {

@@ -42,12 +42,32 @@ namespace EpiSource.Unblocker {
             this.defaultCancellationTimeout =
                 defaultCancellationTimeout.GetValueOrDefault(builtinDefaultCancellationTimeout);
         }
-        
+
         public async Task<T> InvokeAsync<T>(
             Expression<Func<CancellationToken, T>> invocation, CancellationToken ct = new CancellationToken(),
             TimeSpan? cancellationTimeout = null,
             ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
-            SecurityZone securityZone = SecurityZone.MyComputer, WorkerProcessRef workerProcessRef = null
+            SecurityZone securityZone = SecurityZone.MyComputer
+        ) {
+            var handle = await this.InvokeDetailedAsync(invocation, ct, cancellationTimeout, forcedCancellationMode, securityZone).ConfigureAwait(false);
+            return (T) await handle.InvocationTask.ConfigureAwait(false);
+        }
+        
+        public async Task InvokeAsync(
+            Expression<Action<CancellationToken>> invocation, CancellationToken ct = new CancellationToken(),
+            TimeSpan? cancellationTimeout = null,
+            ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
+            SecurityZone securityZone = SecurityZone.MyComputer
+        ) {
+            var handle = await this.InvokeDetailedAsync(invocation, ct, cancellationTimeout, forcedCancellationMode, securityZone).ConfigureAwait(false);
+            await handle.InvocationTask.ConfigureAwait(false);
+        }
+
+        public async Task<UnblockerInvocationHandle<T>> InvokeDetailedAsync<T>(
+            Expression<Func<CancellationToken, T>> invocation, CancellationToken ct = new CancellationToken(),
+            TimeSpan? cancellationTimeout = null,
+            ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
+            SecurityZone securityZone = SecurityZone.MyComputer
         ) {
             if (this.disposed) {
                 throw new ObjectDisposedException("This instance has been disposed.");
@@ -57,22 +77,20 @@ namespace EpiSource.Unblocker {
                 this.standbyTask.Cancel();
                 
                 var nextWorker =  await this.ActivateWorker(ct);
-                return await nextWorker
-                                 .InvokeRemotely(invocation, ct,
-                                           cancellationTimeout.GetValueOrDefault(this.defaultCancellationTimeout),
-                                           forcedCancellationMode, securityZone, workerProcessRef)
-                                       .ConfigureAwait(false);
+                return nextWorker.InvokeRemotely(invocation, ct,
+                    cancellationTimeout.GetValueOrDefault(this.defaultCancellationTimeout),
+                    forcedCancellationMode, securityZone);
             } finally {
                 this.standbyTask.Reset();
             }
             
         }
 
-        public async Task InvokeAsync(
+        public async Task<UnblockerInvocationHandle> InvokeDetailedAsync(
             Expression<Action<CancellationToken>> invocation, CancellationToken ct = new CancellationToken(),
             TimeSpan? cancellationTimeout = null,
             ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
-            SecurityZone securityZone = SecurityZone.MyComputer, WorkerProcessRef workerProcessRef = null
+            SecurityZone securityZone = SecurityZone.MyComputer
         ) {
             if (this.disposed) {
                 throw new ObjectDisposedException("This instance has been disposed.");
@@ -82,10 +100,9 @@ namespace EpiSource.Unblocker {
                 this.standbyTask.Cancel();
 
                 var nextWorker =  await this.ActivateWorker(ct);
-                await nextWorker
-                          .InvokeRemotely(invocation, ct,
-                              cancellationTimeout.GetValueOrDefault(this.defaultCancellationTimeout),
-                              forcedCancellationMode, securityZone, workerProcessRef);
+                return nextWorker.InvokeRemotely(invocation, ct,
+                    cancellationTimeout.GetValueOrDefault(this.defaultCancellationTimeout),
+                    forcedCancellationMode, securityZone);
             } finally {
                 this.standbyTask.Reset();
             }
@@ -119,10 +136,14 @@ namespace EpiSource.Unblocker {
 
             if (this.debugMode != DebugMode.None) {
                 Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                    "{0} Waiting for worker to be ready.", this.id));
+                    "{0} Waiting for worker to be available.", this.id));
             }
             
             await this.waitForWorkerSemaphore.WaitAsync(ct);
+            
+            #if !useInstallUtil
+            await BootstrapAssemblyProvider.Instance.EnsureAvailableAsync();
+            #endif
             
             lock (this.stateLock) {
                 this.RecoverWorkers();
@@ -153,6 +174,10 @@ namespace EpiSource.Unblocker {
                 }
                 return nextClient;
             }
+        }
+
+        private void OnParentProcessExit(object sender, EventArgs e) {
+            this.Dispose();
         }
 
         private void OnWorkerCurrentStateChanged(object sender, WorkerStateChangedEventArgs args) {
@@ -249,6 +274,8 @@ namespace EpiSource.Unblocker {
         private /*protected virtual*/ void Dispose(bool disposing) {
             if (disposing && !this.disposed) {
                 this.disposed = true;
+                
+                AppDomain.CurrentDomain.ProcessExit -= this.OnParentProcessExit;
                 
                 lock (this.stateLock) {
                     foreach (var client in this.idleClients) {

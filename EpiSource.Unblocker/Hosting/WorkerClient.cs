@@ -71,36 +71,32 @@ namespace EpiSource.Unblocker.Hosting {
             return null;
         }
         
-        public async Task<T> InvokeRemotely<T>(
+        public UnblockerInvocationHandle<T> InvokeRemotely<T>(
             Expression<Func<CancellationToken, T>> invocation, CancellationToken ct,
-            TimeSpan cancellationTimeout, ForcedCancellationMode forcedCancellationMode, SecurityZone securityZone,
-            WorkerProcessRef workerProcessRef
+            TimeSpan cancellationTimeout, ForcedCancellationMode forcedCancellationMode, SecurityZone securityZone
         ) {
             var request = InvocationRequest.FromExpression(invocation);
-            return (T) await this.InvokeRemotely(
-                                     request, ct, cancellationTimeout, forcedCancellationMode, securityZone,
-                                     workerProcessRef)
-                                 .ConfigureAwait(false);
+            return this.InvokeRemotely(request, ct, cancellationTimeout, forcedCancellationMode, securityZone)
+                       .CastTo<T>();
         }
 
-        public async Task InvokeRemotely(
+        public UnblockerInvocationHandle InvokeRemotely(
             Expression<Action<CancellationToken>> invocation, CancellationToken ct,
             TimeSpan cancellationTimeout, ForcedCancellationMode forcedCancellationMode,
-            SecurityZone securityZone, WorkerProcessRef workerProcessRef
+            SecurityZone securityZone
         ) {
             var request = InvocationRequest.FromExpression(invocation);
-            await this.InvokeRemotely(
-                          request, ct, cancellationTimeout, forcedCancellationMode, securityZone, workerProcessRef)
-                      .ConfigureAwait(false);
+            return this.InvokeRemotely(request, ct, cancellationTimeout, forcedCancellationMode, securityZone)
+                       .CastToVoid();
         }
 
         public override string ToString() {
             return this.id;
         }
 
-        private Task<object> InvokeRemotely(
+        private UnblockerInvocationHandle<object> InvokeRemotely(
             InvocationRequest request, CancellationToken ct, TimeSpan cancellationTimeout, 
-            ForcedCancellationMode forcedCancellationMode, SecurityZone securityZone, WorkerProcessRef workerProcessRef
+            ForcedCancellationMode forcedCancellationMode, SecurityZone securityZone
         ) {
             const State nextState = State.Busy;
             
@@ -117,23 +113,21 @@ namespace EpiSource.Unblocker.Hosting {
                 
                 this.state = nextState;
                 this.activeTcs = new TaskCompletionSource<object>();
-
-                if (workerProcessRef != null) {
-                    workerProcessRef.WorkerProcess = this.process.Process;
-                }
                 
                 // this is the latest time to check whether the task has already been cancelled, before actually
                 // starting the task!
                 if (ct.IsCancellationRequested) {
                     this.activeTcs.TrySetCanceled();
                     this.activeTcs = null;
-                    return this.activeTcs.Task;
+                    return new UnblockerInvocationHandle<object>(
+                        this.process.Process, this.activeTcs.Task, ct, cancellationTimeout, forcedCancellationMode, securityZone);
                 }
             }
             
             // outside lock!
             this.OnCurrentStateChanged(nextState);
             
+            // FIXME: Dispose registration!
             ct.Register(() => {
                 try {
                     this.serverProxy.Cancel(cancellationTimeout, forcedCancellationMode);
@@ -156,26 +150,27 @@ namespace EpiSource.Unblocker.Hosting {
                 this.serverProxy.Cancel(cancellationTimeout, forcedCancellationMode);
             }
             
-            return this.activeTcs.Task;
+            return new UnblockerInvocationHandle<object>(
+                this.process.Process, this.activeTcs.Task, ct, cancellationTimeout, forcedCancellationMode, securityZone);
         }
 
         // do not hold state lock when invoking this!
         private void OnCurrentStateChanged(State nextState) {
             var handler = this.CurrentStateChangedEvent;
             if (handler != null) {
-                this.CurrentStateChangedEvent(this, new WorkerStateChangedEventArgs(nextState));
+                handler(this, new WorkerStateChangedEventArgs(nextState));
             }
         }
 
-        private void OnRemoteTaskCanceled(object sender, EventArgs args) {
+        private void OnRemoteTaskCanceled(object sender, PortableEventArgs<TaskCanceledEventArgs> args) {
             this.OnRemoteTaskDone(tcs => tcs.TrySetCanceled());
         }
-        private void OnRemoteTaskSucceeded(object sender, TaskSucceededEventArgs args) {
-            this.OnRemoteTaskDone(tcs => tcs.TrySetResult(args.Result));
+        private void OnRemoteTaskSucceeded(object sender, PortableEventArgs<TaskSucceededEventArgs> args) {
+            this.OnRemoteTaskDone(tcs => tcs.TrySetResult(args.Deserialize().Result));
         }
 
-        private void OnRemoteTaskFailed(object sender, TaskFailedEventArgs args) {
-            this.OnRemoteTaskDone(tcs => tcs.TrySetException(args.Exception));
+        private void OnRemoteTaskFailed(object sender, PortableEventArgs<TaskFailedEventArgs> args) {
+            this.OnRemoteTaskDone(tcs => tcs.TrySetException(args.Deserialize().Exception));
         }
 
         private void OnRemoteTaskDone(Action<TaskCompletionSource<object>> tcsUpdate) {

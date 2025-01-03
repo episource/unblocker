@@ -6,20 +6,10 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Reflection;
 using System.Runtime.Remoting;
 using System.Runtime.Remoting.Channels;
 using System.Runtime.Remoting.Channels.Ipc;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
-
-using EpiSource.Unblocker.Util;
-
-using Microsoft.CSharp;
 
 namespace EpiSource.Unblocker.Hosting {
     /// <summary>This is the entry point of the host process.
@@ -110,89 +100,6 @@ namespace EpiSource.Unblocker.Hosting {
             }
             
             Environment.Exit(0);
-        }
-        
-        internal static string CreateBootstrapAssembly() {
-            var hostAssembly = typeof(WorkerServerHost).Assembly;
-            var hostClassName = typeof(WorkerServerHost).FullName;
-
-            Expression<Action<string[]>> startMethod = args => WorkerServerHost.Start(args);
-            var hostStartName = (startMethod.Body as MethodCallExpression).Method.Name;
-
-            Version unblockerVersion;
-            string unblockerCopyright;
-            var assemblyInfoSource = hostAssembly.GetManifestResourceStream("EpiSource.Unblocker.Properties.AssemblyInfo.cs").ReadAllTextAndClose();
-            if (assemblyInfoSource != null) {
-                unblockerVersion = Version.Parse(Regex.Match(assemblyInfoSource, @"^\[assembly: AssemblyVersion\(""([^""]+)", RegexOptions.Multiline).Groups[1].Value);
-                unblockerCopyright = Regex.Match(assemblyInfoSource, @"^\[assembly: AssemblyCopyright\(""([^""]+)", RegexOptions.Multiline).Groups[1].Value;
-            } else {
-                unblockerVersion = hostAssembly.GetName().Version;
-                unblockerCopyright = hostAssembly.GetCustomAttribute<AssemblyCopyrightAttribute>().Copyright;
-            }
-            
-            var source = @"
-using System;
-using System.Reflection;
-using System.Runtime.InteropServices;
-
-[assembly: AssemblyTitle(""EpiSource.Unblocker.Bootstrap"")]
-[assembly: AssemblyDescription(""Dynamically crated worker process entrypoint for EpiSource.Unblocker."")]
-[assembly: AssemblyConfiguration("""")] // placeholder for bootstrapper variant hash
-[assembly: AssemblyCompany(""EpiSource"")]
-[assembly: AssemblyProduct(""EpiSource.Unblocker"")]
-[assembly: AssemblyCopyright(""" + unblockerCopyright + @""")]
-[assembly: AssemblyTrademark("""")]
-[assembly: AssemblyCulture("""")]
-[assembly: ComVisible(false)]
-
-[assembly: AssemblyVersion(""" + unblockerVersion + @""")]
-[assembly: AssemblyFileVersion(""" + unblockerVersion + @""")]
-[assembly: AssemblyInformationalVersion(""" + unblockerVersion + @""")]
-
-
-namespace EpiSource.Unblocker.Hosting {
-    public static class Bootstrapper {
-
-        static Bootstrapper() {
-            AppDomain.CurrentDomain.AssemblyResolve += (s, e) => {
-                if (e.Name == @""" + hostAssembly.FullName + @""") {
-                    return Assembly.LoadFile(@""" + hostAssembly.Location + @""");
-                }
-
-                return null;
-            };
-        }
-
-        public static void Main(string[] args) {
-            " + hostClassName + "." + hostStartName + @"(args);
-        }
-    }
-}
-             ";
-
-            
-            // encode variant hash in bootstrapper assembly attributes
-            var hashString = String.Format("0x{0:x8}", BobJenkinsOneAtATimeHash.CalculateHash(source));
-            source = source.Replace("[assembly: AssemblyConfiguration(\"\")]", "[assembly: AssemblyConfiguration(\"0x" + hashString + "\")]")
-                           .RegexReplace(@"(?<=\[assembly: AssemblyInformationalVersion\(""[^""]*)(?="")", "+" + hashString);
-            
-            var provider = new CSharpCodeProvider();
-            var opts = new CompilerParameters {
-                OutputAssembly = Path.Combine(Path.GetTempPath(), String.Format("EpiSource.Unblocker.Bootstrap_{0}+{1}.exe", unblockerVersion, hashString)),
-                GenerateInMemory = false,
-                GenerateExecutable = true,
-                MainClass = "EpiSource.Unblocker.Hosting.Bootstrapper",
-                ReferencedAssemblies = { "System.dll", hostAssembly.Location }
-            };
-
-            var result = provider.CompileAssemblyFromSource(opts, source);
-            if (result.NativeCompilerReturnValue == 0) return result.PathToAssembly;
-            
-            var ex = new InvalidOperationException("Failed to generate bootstrap assembly.");
-            ex.Data["Errors"] = result.Errors;
-            ex.Data["Output"] = result.Output;
-            throw ex;
-
         }
     }
 }
