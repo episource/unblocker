@@ -3,53 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.Serialization.Formatters.Binary;
-using System.Text;
-
-using EpiSource.Unblocker.Util;
 
 namespace EpiSource.Unblocker.Hosting {
-    public partial class InvocationRequest {
-        [Serializable]
-        public sealed class PortableInvocationRequest {
-            // Actual invocation request stored as binary data to prevent remoting framework from automatically
-            // deserializing it: This required loading all referenced assemblies in the AppDomain running the server
-            // application. However, assemblies should be loaded in a task specific AppDomain.
-            private readonly byte[] serializedInvocationRequest;
-
-            private readonly AssemblyReferencePool referencePool;
-            private readonly string methodName;
-            private readonly string applicationBase;
-
-            public PortableInvocationRequest(InvocationRequest request) {
-                if (request == null) {
-                    throw new ArgumentNullException("request");
-                }
-                
-                this.serializedInvocationRequest = request.SerializeToBinary();
-                this.referencePool = new AssemblyReferencePool(AppDomain.CurrentDomain);
-                this.methodName = request.Method.DeclaringType.FullName + "." + request.Method.Name;
-                this.applicationBase = AppDomain.CurrentDomain.BaseDirectory;
-            }
-
-            public string MethodName {
-                get { return this.methodName; }
-            }
-
-            public string ApplicationBase {
-                get { return this.applicationBase; }
-            }
-
-            public InvocationRequest ToInvocationRequest() {
-                this.referencePool.AttachToDomain(AppDomain.CurrentDomain);
-                try {
-                    return this.serializedInvocationRequest.DeserializeFromBinary<InvocationRequest>();
-                } finally {
-                    this.referencePool.DetachFromDomain(AppDomain.CurrentDomain);
-                }
-            }
-        }
-
+    public sealed partial class PortableInvocationRequest {
         [Serializable]
         private sealed class AssemblyReferencePool {
             private readonly IDictionary<string, string> nameToLocationMap;
@@ -88,8 +44,5 @@ namespace EpiSource.Unblocker.Hosting {
                 return location != null ? Assembly.ReflectionOnlyLoadFrom(location) : null;
             }
         }
-
-        [Serializable]
-        private struct CancellationTokenMarker { }
     }
 }

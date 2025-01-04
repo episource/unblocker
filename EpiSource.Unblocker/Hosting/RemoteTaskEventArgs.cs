@@ -1,8 +1,28 @@
 using System;
+using System.Runtime.CompilerServices;
 
 using EpiSource.Unblocker.Util;
 
 namespace EpiSource.Unblocker.Hosting {
+
+    [Serializable]
+    public class RemoteTaskEventArgs : EventArgs {
+
+        private object target;
+        public RemoteTaskEventArgs(object target) {
+            this.target = target;
+        }
+
+        public object Target {
+            get {
+                return this.target;
+            }
+        }
+
+        public T GetTargetAs<T>() {
+            return (T)this.target;
+        }
+    }
 
     [Serializable]
     public sealed class PortableEventArgs<T> : EventArgs {
@@ -18,13 +38,16 @@ namespace EpiSource.Unblocker.Hosting {
     }
     
     [Serializable]
-    public sealed class TaskSucceededEventArgs : EventArgs {
+    public sealed class TaskSucceededEventArgs : RemoteTaskEventArgs {
         
-        public TaskSucceededEventArgs(object result) {
+        public TaskSucceededEventArgs(object target, object result, bool hasResult) : base(target) {
             this.Result = result;
+            this.HasResult = hasResult;
         }
 
         public object Result { get; private set; }
+        
+        public bool HasResult { get; private set; }
 
         public PortableEventArgs<TaskSucceededEventArgs> ToPortable() {
             return new PortableEventArgs<TaskSucceededEventArgs>(this);
@@ -32,8 +55,8 @@ namespace EpiSource.Unblocker.Hosting {
     }
 
     [Serializable]
-    public sealed class TaskFailedEventArgs : EventArgs {
-        public TaskFailedEventArgs(Exception e) {
+    public sealed class TaskFailedEventArgs : RemoteTaskEventArgs {
+        public TaskFailedEventArgs(object target, Exception e) : base(target) {
             this.Exception = e;
         }
 
@@ -45,9 +68,9 @@ namespace EpiSource.Unblocker.Hosting {
     }
 
     [Serializable]
-    public sealed class TaskCanceledEventArgs : EventArgs {
+    public sealed class TaskCanceledEventArgs : RemoteTaskEventArgs {
 
-        public TaskCanceledEventArgs(bool canceledVoluntarily) {
+        public TaskCanceledEventArgs(object target, bool canceledVoluntarily) : base(target) {
             this.CanceledVoluntarily = canceledVoluntarily;
         }
         

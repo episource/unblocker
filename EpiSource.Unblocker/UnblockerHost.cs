@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 
 using EpiSource.Unblocker.Hosting;
 using EpiSource.Unblocker.Tasks;
+using EpiSource.Unblocker.Util;
 
 namespace EpiSource.Unblocker {
     public sealed class UnblockerHost : IDisposable {
@@ -42,15 +43,17 @@ namespace EpiSource.Unblocker {
             this.defaultCancellationTimeout =
                 defaultCancellationTimeout.GetValueOrDefault(builtinDefaultCancellationTimeout);
         }
+        
+        #region InvokeAsync
 
-        public async Task<T> InvokeAsync<T>(
-            Expression<Func<CancellationToken, T>> invocation, CancellationToken ct = new CancellationToken(),
+        public async Task<TReturn> InvokeAsync<TReturn>(
+            Expression<Func<CancellationToken, TReturn>> invocation, CancellationToken ct = new CancellationToken(),
             TimeSpan? cancellationTimeout = null,
             ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
             SecurityZone securityZone = SecurityZone.MyComputer
         ) {
             var handle = await this.InvokeDetailedAsync(invocation, ct, cancellationTimeout, forcedCancellationMode, securityZone).ConfigureAwait(false);
-            return (T) await handle.InvocationTask.ConfigureAwait(false);
+            return await handle.PlainResult.AsAwaitable().ConfigureAwait(false);
         }
         
         public async Task InvokeAsync(
@@ -60,53 +63,110 @@ namespace EpiSource.Unblocker {
             SecurityZone securityZone = SecurityZone.MyComputer
         ) {
             var handle = await this.InvokeDetailedAsync(invocation, ct, cancellationTimeout, forcedCancellationMode, securityZone).ConfigureAwait(false);
-            await handle.InvocationTask.ConfigureAwait(false);
+            await handle.WaitAsync();
         }
-
-        public async Task<UnblockerInvocationHandle<T>> InvokeDetailedAsync<T>(
-            Expression<Func<CancellationToken, T>> invocation, CancellationToken ct = new CancellationToken(),
+        
+        #endregion
+        
+        #region InvokeMutableAsync
+        
+        public async Task<IMethodInvocationResult<TTarget>> InvokeMutableAsync<TTarget>(TTarget target, Expression<Action<CancellationToken, TTarget>> invocation, CancellationToken ct = new CancellationToken(),
+            TimeSpan? cancellationTimeout = null,
+            ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
+            SecurityZone securityZone = SecurityZone.MyComputer) {
+            var handle = await this.InvokeDetailedAsync(target, invocation, ct, cancellationTimeout, forcedCancellationMode, securityZone).ConfigureAwait(false);
+            return await handle.MethodInvocationResult.AsAwaitable().ConfigureAwait(false);
+        }
+        
+        public async Task<IMethodInvocationResult<TTarget>> InvokeMutableAsync<TTarget>(
+            Expression<Action<CancellationToken>> invocation, TypeReference<TTarget> targetType, CancellationToken ct = new CancellationToken(),
             TimeSpan? cancellationTimeout = null,
             ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
             SecurityZone securityZone = SecurityZone.MyComputer
         ) {
-            if (this.disposed) {
-                throw new ObjectDisposedException("This instance has been disposed.");
-            }
-            
-            try {
-                this.standbyTask.Cancel();
-                
-                var nextWorker =  await this.ActivateWorker(ct);
-                return nextWorker.InvokeRemotely(invocation, ct,
-                    cancellationTimeout.GetValueOrDefault(this.defaultCancellationTimeout),
-                    forcedCancellationMode, securityZone);
-            } finally {
-                this.standbyTask.Reset();
-            }
-            
+            var handle = await this.InvokeDetailedAsync(invocation, targetType, ct, cancellationTimeout, forcedCancellationMode, securityZone).ConfigureAwait(false);
+            return await handle.MethodInvocationResult.AsAwaitable().ConfigureAwait(false);
         }
+        
+        public async Task<IFunctionInvocationResult<TTarget, TReturn>> InvokeMutableAsync<TReturn, TTarget>(TTarget target, Expression<Func<CancellationToken, TTarget, TReturn>> invocation, CancellationToken ct = new CancellationToken(),
+            TimeSpan? cancellationTimeout = null,
+            ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
+            SecurityZone securityZone = SecurityZone.MyComputer) {
+            var handle = await this.InvokeDetailedAsync(target, invocation, ct, cancellationTimeout, forcedCancellationMode, securityZone).ConfigureAwait(false);
+            return await handle.FunctionInvocationResult.AsAwaitable().ConfigureAwait(false);
+        }
+        
+        public async Task<IFunctionInvocationResult<TTarget, TReturn>> InvokeMutableAsync<TReturn, TTarget>(
+            Expression<Func<CancellationToken, TReturn>> invocation, TypeReference<TTarget> targetType, CancellationToken ct = new CancellationToken(),
+            TimeSpan? cancellationTimeout = null,
+            ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
+            SecurityZone securityZone = SecurityZone.MyComputer
+        ) {
+            var handle = await this.InvokeDetailedAsync(invocation, targetType, ct, cancellationTimeout, forcedCancellationMode, securityZone).ConfigureAwait(false);
+            return await handle.FunctionInvocationResult.AsAwaitable().ConfigureAwait(false);
+        }
+        
+        #endregion
+        
+        #region InvokeDetailedAsync
 
-        public async Task<UnblockerInvocationHandle> InvokeDetailedAsync(
+        public async Task<IFunctionInvocationHandle<object, TReturn>> InvokeDetailedAsync<TReturn>(
+            Expression<Func<CancellationToken, TReturn>> invocation, CancellationToken ct = new CancellationToken(),
+            TimeSpan? cancellationTimeout = null,
+            ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
+            SecurityZone securityZone = SecurityZone.MyComputer
+        ) {
+            return await this.InvokeDetailedImplAsync(ct, w =>
+                w.InvokeRemotely(invocation, ct, cancellationTimeout.GetValueOrDefault(this.defaultCancellationTimeout), forcedCancellationMode, securityZone));
+        }
+        
+        public async Task<IFunctionInvocationHandle<TTarget, TReturn>> InvokeDetailedAsync<TReturn, TTarget>(TTarget target, Expression<Func<CancellationToken, TTarget, TReturn>> invocation, CancellationToken ct = new CancellationToken(),
+            TimeSpan? cancellationTimeout = null,
+            ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
+            SecurityZone securityZone = SecurityZone.MyComputer) {
+            return await this.InvokeDetailedImplAsync(ct, w =>
+                w.InvokeRemotely(invocation, target, ct, cancellationTimeout.GetValueOrDefault(this.defaultCancellationTimeout), forcedCancellationMode, securityZone));
+        }
+        
+        public async Task<IFunctionInvocationHandle<TTarget, TReturn>> InvokeDetailedAsync<TReturn, TTarget>(
+            Expression<Func<CancellationToken, TReturn>> invocation, TypeReference<TTarget> targetType, CancellationToken ct = new CancellationToken(),
+            TimeSpan? cancellationTimeout = null,
+            ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
+            SecurityZone securityZone = SecurityZone.MyComputer
+        ) {
+            return await this.InvokeDetailedImplAsync(ct, w =>
+                w.InvokeRemotely(invocation, targetType, ct, cancellationTimeout.GetValueOrDefault(this.defaultCancellationTimeout), forcedCancellationMode, securityZone));
+        }
+        
+        public async Task<IMethodInvocationHandle<object>> InvokeDetailedAsync(
             Expression<Action<CancellationToken>> invocation, CancellationToken ct = new CancellationToken(),
             TimeSpan? cancellationTimeout = null,
             ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
             SecurityZone securityZone = SecurityZone.MyComputer
         ) {
-            if (this.disposed) {
-                throw new ObjectDisposedException("This instance has been disposed.");
-            }
-
-            try {
-                this.standbyTask.Cancel();
-
-                var nextWorker =  await this.ActivateWorker(ct);
-                return nextWorker.InvokeRemotely(invocation, ct,
-                    cancellationTimeout.GetValueOrDefault(this.defaultCancellationTimeout),
-                    forcedCancellationMode, securityZone);
-            } finally {
-                this.standbyTask.Reset();
-            }
+            return await this.InvokeDetailedImplAsync(ct, w =>
+                w.InvokeRemotely(invocation, ct, cancellationTimeout.GetValueOrDefault(this.defaultCancellationTimeout), forcedCancellationMode, securityZone));
         }
+
+        public async Task<IMethodInvocationHandle<TTarget>> InvokeDetailedAsync<TTarget>(TTarget target, Expression<Action<CancellationToken, TTarget>> invocation, CancellationToken ct = new CancellationToken(),
+            TimeSpan? cancellationTimeout = null,
+            ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
+            SecurityZone securityZone = SecurityZone.MyComputer) {
+            return await this.InvokeDetailedImplAsync(ct, w =>
+                w.InvokeRemotely(invocation, target, ct, cancellationTimeout.GetValueOrDefault(this.defaultCancellationTimeout), forcedCancellationMode, securityZone));
+        }
+        
+        public async Task<IMethodInvocationHandle<TTarget>> InvokeDetailedAsync<TTarget>(
+            Expression<Action<CancellationToken>> invocation, TypeReference<TTarget> targetType, CancellationToken ct = new CancellationToken(),
+            TimeSpan? cancellationTimeout = null,
+            ForcedCancellationMode forcedCancellationMode = ForcedCancellationMode.CleanupAfterCancellation,
+            SecurityZone securityZone = SecurityZone.MyComputer
+        ) {
+            return await this.InvokeDetailedImplAsync(ct, w =>
+                w.InvokeRemotely(invocation, targetType, ct, cancellationTimeout.GetValueOrDefault(this.defaultCancellationTimeout), forcedCancellationMode, securityZone));
+        }
+        
+        #endregion
 
         // releases all idle workers
         public void Standby() {
@@ -173,6 +233,21 @@ namespace EpiSource.Unblocker {
                         "{0} Successfully retrieved worker {1}", this.id, nextClient));
                 }
                 return nextClient;
+            }
+        }
+
+        private async Task<H> InvokeDetailedImplAsync<H>(CancellationToken ct, Func<WorkerClient, H> workerInvocation) {
+            if (this.disposed) {
+                throw new ObjectDisposedException("This instance has been disposed.");
+            }
+
+            try {
+                this.standbyTask.Cancel();
+
+                var nextWorker =  await this.ActivateWorker(ct);
+                return workerInvocation.Invoke(nextWorker);
+            } finally {
+                this.standbyTask.Reset();
             }
         }
 

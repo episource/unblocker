@@ -24,22 +24,25 @@ namespace EpiSource.Unblocker.Hosting {
                 this.cts.Cancel();
             }
 
-            public EventArgs InvokeSynchronously(
-                InvocationRequest.PortableInvocationRequest portableInvocationRequest
+            public EventArgs InvokeSynchronously(IPortableInvocationRequest portableInvocationRequest
             ) {
                 // Important: Calling parent.OnRunner* causes the app domain executing the current runner to be unloaded
+                object target = null;
                 try {
+                    var request = portableInvocationRequest.ToInvocationRequest();
+                    target = request.Target;
+                    
                     this.cts.Token.ThrowIfCancellationRequested();
-                    var result = portableInvocationRequest.ToInvocationRequest().Invoke(this.cts.Token);
-                    return new TaskSucceededEventArgs(result).ToPortable();
+                    var result = request.Invoke(this.cts.Token);
+                    return new TaskSucceededEventArgs(target, result, request.HasReturnParameter).ToPortable();
                 } catch (OperationCanceledException e) {
                     if (e.CancellationToken == this.cts.Token) {
-                        return new TaskCanceledEventArgs(true).ToPortable();
+                        return new TaskCanceledEventArgs(target, true).ToPortable();
                     } 
                         
-                    return new TaskFailedEventArgs(e).ToPortable();
+                    return new TaskFailedEventArgs(target, e).ToPortable();
                 } catch (Exception e) {
-                    return new TaskFailedEventArgs(e).ToPortable();
+                    return new TaskFailedEventArgs(target, e).ToPortable();
                 }
             }
         }

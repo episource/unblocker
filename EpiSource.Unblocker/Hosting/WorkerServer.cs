@@ -18,7 +18,7 @@ namespace EpiSource.Unblocker.Hosting {
 
         void Cancel(TimeSpan cancelTimeout, ForcedCancellationMode forcedCancellationMode);
 
-        void InvokeAsync(InvocationRequest.PortableInvocationRequest invocationRequest, SecurityZone securityZone);
+        void InvokeAsync(IPortableInvocationRequest invocationRequest, SecurityZone securityZone);
     }
 
     public sealed partial class WorkerServer : MarshalByRefObject, IWorkerServer {
@@ -59,9 +59,7 @@ namespace EpiSource.Unblocker.Hosting {
 
         // returns when invocation is started, but before it returns
         // end of invocation is signaled via TaskCompletionSourceProxy
-        public void InvokeAsync(
-            InvocationRequest.PortableInvocationRequest invocationRequest, SecurityZone securityZone
-        ) {
+        public void InvokeAsync(IPortableInvocationRequest invocationRequest, SecurityZone securityZone) {
             if (invocationRequest == null) {
                 throw new ArgumentNullException("invocationRequest");
             }
@@ -103,7 +101,7 @@ namespace EpiSource.Unblocker.Hosting {
                     var result = this.activeRunner.InvokeSynchronously(invocationRequest);
                     this.OnRunnerDone(result);
                 } catch (SerializationException e) {
-                    this.OnRunnerDone(new TaskFailedEventArgs(e));
+                    this.OnRunnerDone(new TaskFailedEventArgs(null, e));
                 } catch (Exception e) {
                     Console.WriteLine("Ignored exception during invocation: " + e);
                 } finally {
@@ -214,7 +212,7 @@ namespace EpiSource.Unblocker.Hosting {
 
                 if (asyncCancellation) {
                     this.TaskCanceledEvent.InvokeEvent(
-                        e => e(this, new TaskCanceledEventArgs(false).ToPortable()));
+                        e => e(this, new TaskCanceledEventArgs(null, false).ToPortable()));
                 }
             }
             
@@ -235,7 +233,7 @@ namespace EpiSource.Unblocker.Hosting {
                 
                 if (!cleanShutdown && !asyncCancellation) {
                     this.TaskCanceledEvent.InvokeEvent(
-                        e => e(this, new TaskCanceledEventArgs(false).ToPortable()));
+                        e => e(this, new TaskCanceledEventArgs(null, false).ToPortable()));
                 }
 
                 lock (this.stateLock) {

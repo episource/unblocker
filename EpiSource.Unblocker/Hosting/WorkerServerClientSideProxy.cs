@@ -119,7 +119,7 @@ namespace EpiSource.Unblocker.Hosting {
             this.remoteProxy.Cancel(cancelTimeout, forcedCancellationMode);
         }
 
-        public void InvokeAsync(InvocationRequest.PortableInvocationRequest invocationRequest, SecurityZone securityZone) {
+        public void InvokeAsync(IPortableInvocationRequest invocationRequest, SecurityZone securityZone) {
             this.remoteProxy.InvokeAsync(invocationRequest, securityZone);
         }
 

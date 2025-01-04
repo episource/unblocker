@@ -46,14 +46,16 @@
     <Compile Include="Hosting\ForcedCancellationMode.cs" />
     <Compile Include="Hosting\HostingExtensions.cs" />
     <Compile Include="Hosting\DebugMode.cs" />
+    <Compile Include="Hosting\InvocationHandle.cs" />
+    <Compile Include="Hosting\PortableInvocationRequest.cs" />
+    <Compile Include="Hosting\PortableInvocationRequest.types.cs">
+      <DependentUpon>PortableInvocationRequest.cs</DependentUpon>
+    </Compile>
     <Compile Include="Hosting\RemoteTaskEventArgs.cs" />
     <Compile Include="Hosting\TaskCrashedException.cs" />
-    <Compile Include="Hosting\UnblockerInvocationHandle.cs" />
     <Compile Include="Hosting\WorkerServerHost.cs" />
     <Compile Include="Hosting\InvocationRequest.cs" />
-    <Compile Include="Hosting\InvocationRequest.types.cs">
-      <DependentUpon>InvocationRequest.cs</DependentUpon>
-    </Compile>
+    <Compile Include="Hosting\InvocationResult.cs" />
     <Compile Include="Hosting\WorkerClient.cs" />
     <Compile Include="Hosting\WorkerServerClientSideProxy.cs" />
     <Compile Include="Hosting\WorkerProcess.cs" />
@@ -63,11 +65,14 @@
     </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Tasks\CountdownTask.cs" />
+    <Compile Include="Tasks\TaskExtensions.cs" />
+    <Compile Include="Tasks\TaskLike.cs" />
     <Compile Include="UnblockerHost.cs" />
     <Compile Include="Util\BobJenkinsHash.cs" />
     <Compile Include="Util\SerializationExtensions.cs" />
     <Compile Include="Util\StreamExtensions.cs" />
     <Compile Include="Util\StringExtensions.cs" />
+    <Compile Include="Util\TypeReference.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
