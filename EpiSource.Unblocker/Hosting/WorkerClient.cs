@@ -33,6 +33,7 @@ namespace EpiSource.Unblocker.Hosting {
         
         private volatile State state = State.Idle;
         private TaskCompletionSource<object> activeTcs;
+        private CancellationTokenRegistration activeCancellationRegistration;
 
         public WorkerClient(WorkerProcess process, IWorkerServer serverProxy) {
             this.process = process;
@@ -122,24 +123,24 @@ namespace EpiSource.Unblocker.Hosting {
                     return new UnblockerInvocationHandle<object>(
                         this.process.Process, this.activeTcs.Task, ct, cancellationTimeout, forcedCancellationMode, securityZone);
                 }
+                
+                this.activeCancellationRegistration = ct.Register(() => {
+                    try {
+                        this.serverProxy.Cancel(cancellationTimeout, forcedCancellationMode);
+                    } catch (RemotingException) {
+                        if (!this.process.IsAlive) {
+                            // worker killed itself or crashed: ignore!
+                            return;
+                        }
+
+                        throw;
+                    }
+                });
             }
             
-            // outside lock!
+            // Raise event outside lock!
             this.OnCurrentStateChanged(nextState);
             
-            // FIXME: Dispose registration!
-            ct.Register(() => {
-                try {
-                    this.serverProxy.Cancel(cancellationTimeout, forcedCancellationMode);
-                } catch (RemotingException) {
-                    if (!this.process.IsAlive) {
-                        // worker killed itself or crashed: ignore!
-                        return;
-                    }
-
-                    throw;
-                }
-            });
             this.serverProxy.InvokeAsync(request.ToPortableInvocationRequest(), securityZone);
 
             // Calling Cancel(..) on the server is only handled if there's a invocation request being handled!
@@ -178,7 +179,8 @@ namespace EpiSource.Unblocker.Hosting {
             
             lock (this.stateLock) {
                 this.state = nextState;
-                
+
+                this.activeCancellationRegistration.Dispose();
                 tcsUpdate(this.activeTcs);
                 this.activeTcs = null;
             }
@@ -202,6 +204,8 @@ namespace EpiSource.Unblocker.Hosting {
             const State nextState = State.Dead;
             
             lock (this.stateLock) {
+                this.activeCancellationRegistration.Dispose();
+                
                 if (this.activeTcs != null) {
                     if (this.state == State.Dying) {
                         this.activeTcs.TrySetCanceled();
@@ -224,6 +228,8 @@ namespace EpiSource.Unblocker.Hosting {
             const State nextState = State.Idle;
             
             lock (this.stateLock) {
+                this.activeCancellationRegistration.Dispose();
+                
                 // should never happen - nevertheless give the best to handle this
                 if (this.activeTcs != null) {
                     this.activeTcs.TrySetCanceled();
@@ -253,6 +259,12 @@ namespace EpiSource.Unblocker.Hosting {
                     this.serverProxy.TaskFailedEvent -= this.OnRemoteTaskFailed;
                     this.serverProxy.TaskCanceledEvent -= this.OnRemoteTaskCanceled;
                     this.serverProxy.TaskSucceededEvent -= this.OnRemoteTaskSucceeded;
+
+                    this.activeCancellationRegistration.Dispose();
+                    if (this.activeTcs != null) {
+                        this.activeTcs.TrySetException(new ObjectDisposedException("WorkerClient was disposed."));
+                        this.activeTcs = null;
+                    }
                     
                     this.proxyLifetimeSponsor.Close();
                     this.process.Dispose();
