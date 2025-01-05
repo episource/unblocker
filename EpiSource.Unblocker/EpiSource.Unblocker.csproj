@@ -70,7 +70,6 @@
     <Compile Include="UnblockerHost.cs" />
     <Compile Include="Util\BobJenkinsHash.cs" />
     <Compile Include="Util\SerializationExtensions.cs" />
-    <Compile Include="Util\StreamExtensions.cs" />
     <Compile Include="Util\StringExtensions.cs" />
     <Compile Include="Util\TypeReference.cs" />
   </ItemGroup>
