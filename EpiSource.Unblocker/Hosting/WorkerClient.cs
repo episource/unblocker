@@ -80,7 +80,7 @@ namespace EpiSource.Unblocker.Hosting {
             TimeSpan cancellationTimeout, ForcedCancellationMode forcedCancellationMode, SecurityZone securityZone
         ) {
             var request = InvocationRequest.FromExpression(invocation);
-            return this.InvokeRemotely(request, ct, cancellationTimeout, forcedCancellationMode, securityZone);
+            return this.InvokeRemotelyImpl(request, ct, cancellationTimeout, forcedCancellationMode, securityZone);
         }
         
         public IFunctionInvocationHandle<TTarget, TReturn> InvokeRemotely<TTarget, TReturn>(
@@ -88,7 +88,7 @@ namespace EpiSource.Unblocker.Hosting {
             TimeSpan cancellationTimeout, ForcedCancellationMode forcedCancellationMode, SecurityZone securityZone
         ) {
             var request = InvocationRequest.FromExpression(invocation, targetType);
-            return this.InvokeRemotely(request, ct, cancellationTimeout, forcedCancellationMode, securityZone);
+            return this.InvokeRemotelyImpl(request, ct, cancellationTimeout, forcedCancellationMode, securityZone);
         }
         
         public IFunctionInvocationHandle<TTarget, TReturn> InvokeRemotely<TReturn, TTarget>(
@@ -96,7 +96,14 @@ namespace EpiSource.Unblocker.Hosting {
             TimeSpan cancellationTimeout, ForcedCancellationMode forcedCancellationMode, SecurityZone securityZone
         ) {
             var request = InvocationRequest.FromExpression(invocation, target);
-            return this.InvokeRemotely(request, ct, cancellationTimeout, forcedCancellationMode, securityZone);
+            return this.InvokeRemotelyImpl(request, ct, cancellationTimeout, forcedCancellationMode, securityZone);
+        }
+        
+        public IFunctionInvocationHandle<TTarget, TReturn> InvokeRemotely<TReturn, TTarget>(
+            IInvocationRequest<TTarget, TReturn> invocationRequest, CancellationToken ct,
+            TimeSpan cancellationTimeout, ForcedCancellationMode forcedCancellationMode, SecurityZone securityZone
+        ) {
+            return this.InvokeRemotelyImpl(invocationRequest, ct, cancellationTimeout, forcedCancellationMode, securityZone);
         }
 
         public IMethodInvocationHandle<object> InvokeRemotely(
@@ -105,7 +112,7 @@ namespace EpiSource.Unblocker.Hosting {
             SecurityZone securityZone
         ) {
             var request = InvocationRequest.FromExpression(invocation);
-            return this.InvokeRemotely(request, ct, cancellationTimeout, forcedCancellationMode, securityZone);
+            return this.InvokeRemotelyImpl(request, ct, cancellationTimeout, forcedCancellationMode, securityZone);
         }
         
         public IMethodInvocationHandle<TTarget> InvokeRemotely<TTarget>(
@@ -114,7 +121,7 @@ namespace EpiSource.Unblocker.Hosting {
             SecurityZone securityZone
         ) {
             var request = InvocationRequest.FromExpression(invocation, target);
-            return this.InvokeRemotely(request, ct, cancellationTimeout, forcedCancellationMode, securityZone);
+            return this.InvokeRemotelyImpl(request, ct, cancellationTimeout, forcedCancellationMode, securityZone);
         }
         
         public IMethodInvocationHandle<TTarget> InvokeRemotely<TTarget>(
@@ -123,15 +130,31 @@ namespace EpiSource.Unblocker.Hosting {
             SecurityZone securityZone
         ) {
             var request = InvocationRequest.FromExpression(invocation, targetType);
-            return this.InvokeRemotely(request, ct, cancellationTimeout, forcedCancellationMode, securityZone);
+            return this.InvokeRemotelyImpl(request, ct, cancellationTimeout, forcedCancellationMode, securityZone);
+        }
+        
+        public IMethodInvocationHandle<TTarget> InvokeRemotely<TTarget>(
+            IInvocationRequest<TTarget> invocationRequest, CancellationToken ct,
+            TimeSpan cancellationTimeout, ForcedCancellationMode forcedCancellationMode,
+            SecurityZone securityZone
+        ) {
+            return this.InvokeRemotelyImpl(invocationRequest.Expand(), ct, cancellationTimeout, forcedCancellationMode, securityZone);
+        }
+        
+        public IInvocationHandle InvokeRemotely(
+            IInvocationRequest invocationRequest, CancellationToken ct,
+            TimeSpan cancellationTimeout, ForcedCancellationMode forcedCancellationMode,
+            SecurityZone securityZone
+        ) {
+            return this.InvokeRemotelyImpl(invocationRequest.Expand(), ct, cancellationTimeout, forcedCancellationMode, securityZone);
         }
 
         public override string ToString() {
             return this.id;
         }
 
-        private InvocationHandle<TTarget, TReturn> InvokeRemotely<TTarget, TReturn>(
-            InvocationRequest<TTarget, TReturn> request, CancellationToken ct, TimeSpan cancellationTimeout, 
+        private InvocationHandle<TTarget, TReturn> InvokeRemotelyImpl<TTarget, TReturn>(
+            IInvocationRequest<TTarget, TReturn> request, CancellationToken ct, TimeSpan cancellationTimeout, 
             ForcedCancellationMode forcedCancellationMode, SecurityZone securityZone
         ) {
             const State nextState = State.Busy;

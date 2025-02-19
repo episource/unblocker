@@ -20,12 +20,15 @@ namespace EpiSource.Unblocker.Hosting {
         Type ReturnType { get; }
         IPortableInvocationRequest ToPortableInvocationRequest();
         object Invoke(CancellationToken token);
+        IInvocationRequest<object, object> Expand();
     }
 
     public interface IInvocationRequest<out TTarget> : IInvocationRequest {
         new TTarget Target { get; }
         
         new void Invoke(CancellationToken token);
+        
+        IInvocationRequest<TTarget, object> Expand();
     }
     
     public interface IInvocationRequest<out TTarget, out TReturn> : IInvocationRequest<TTarget> {
@@ -66,7 +69,7 @@ namespace EpiSource.Unblocker.Hosting {
     }
     
     [Serializable]
-    public sealed partial class InvocationRequest<TTarget, TReturn> : IInvocationRequest<TTarget, TReturn> {
+    public sealed class InvocationRequest<TTarget, TReturn> : IInvocationRequest<TTarget, TReturn> {
         
         [Serializable]
         private struct CancellationTokenMarker { }
@@ -138,6 +141,13 @@ namespace EpiSource.Unblocker.Hosting {
 
         void IInvocationRequest<TTarget>.Invoke(CancellationToken token) {
             this.Invoke(token);
+        }
+
+        IInvocationRequest<object, object> IInvocationRequest.Expand() {
+            return new InvocationRequest<object, object>(this.method, this.target, this.args);;
+        }
+        IInvocationRequest<TTarget, object> IInvocationRequest<TTarget>.Expand() {
+            return new InvocationRequest<TTarget, object>(this.method, this.target, this.args);
         }
 
         internal static InvocationRequest<TTarget, TReturn> FromExpression(LambdaExpression invocation, TTarget target) {

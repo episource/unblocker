@@ -13,18 +13,18 @@ namespace EpiSource.Unblocker.Hosting {
         /// </returns>
         TTarget PostInvocationTarget { get; }
     }
+    
+    public interface IMethodInvocationResult<out TTarget> : IInvocationResult<TTarget> {
+        
+    }
 
-    public interface IFunctionInvocationResult<out TTarget, out TReturn> : IInvocationResult<TTarget> {
+    public interface IFunctionInvocationResult<out TTarget, out TReturn> : IMethodInvocationResult<TTarget> {
         bool HasResult { get; }
         TReturn Result { get; }
     }
 
-    public interface IMethodInvocationResult<out TTarget> : IInvocationResult<TTarget> {
-        
-    }
-    
     [Serializable]
-    public sealed class InvocationResult<TTarget, TReturn>  : IMethodInvocationResult<TTarget>, IFunctionInvocationResult<TTarget, TReturn> {
+    public sealed class InvocationResult<TTarget, TReturn>  : IFunctionInvocationResult<TTarget, TReturn> {
         private readonly TTarget postInvocationTarget;
         private readonly TReturn result;
         private readonly bool hasResult;
