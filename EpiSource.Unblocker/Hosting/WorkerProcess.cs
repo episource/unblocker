@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -85,8 +86,8 @@ namespace EpiSource.Unblocker.Hosting {
                         Arguments = string.Format(CultureInfo.InvariantCulture,
                             "/LogFile= /notransaction /ipcguid={0} /parentpid={1} /debug={2} {3}",
                             ipcguid, Process.GetCurrentProcess().Id, debug, typeof(WorkerServerHost).Assembly.Location),
-                        RedirectStandardOutput = redirectConsole,
-                        RedirectStandardError = redirectConsole
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true
                     },
                     EnableRaisingEvents = true
                 };
@@ -97,6 +98,11 @@ namespace EpiSource.Unblocker.Hosting {
                         handler(this, args);
                     }
                 };
+
+                var startupConsoleOutputBuffer = new StringBuilder();
+                DataReceivedEventHandler startupConsoleOutputHandler = (s, e) => startupConsoleOutputBuffer.AppendLine(e.Data);
+                this.process.OutputDataReceived += startupConsoleOutputHandler;
+                this.process.ErrorDataReceived += startupConsoleOutputHandler;
                 
                 if (redirectConsole) {
                     this.process.OutputDataReceived += (s, e) => Console.WriteLine(e.Data);
@@ -125,10 +131,8 @@ namespace EpiSource.Unblocker.Hosting {
                     throw;
                 }
 
-                if (redirectConsole) {
-                    this.process.BeginOutputReadLine();
-                    this.process.BeginErrorReadLine();
-                }
+                this.process.BeginOutputReadLine();
+                this.process.BeginErrorReadLine();
 
                 var timeoutMs = debug == DebugMode.Debugger ? -1 : (int)StartupTimeout.TotalMilliseconds;
                 var isReady = waitForProcessReadyHandle.WaitOne(timeoutMs, false);
@@ -139,10 +143,20 @@ namespace EpiSource.Unblocker.Hosting {
                     } catch (Exception) {
                         // already did my best - nothing more left to do
                     }
-
+                    
                     throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture,
-                        "Failed to start unblocker process. Wasn't ready within {0}s!",
-                        StartupTimeout.TotalSeconds));
+                        "Failed to start unblocker process. Wasn't ready within {0}s!{1}",
+                        StartupTimeout.TotalSeconds,
+                        startupConsoleOutputBuffer.Length > 0 
+                            ? "\n\nProcess Console Output:\n" + startupConsoleOutputBuffer + "\n"
+                            : ""));
+                }
+                
+                this.process.OutputDataReceived -= startupConsoleOutputHandler;
+                this.process.ErrorDataReceived -= startupConsoleOutputHandler;
+                if (!redirectConsole) {
+                    this.process.CancelOutputRead();
+                    this.process.CancelErrorRead();
                 }
 
                 var server = WorkerServerClientSideProxy.ConnectToWorkerServer(ipcguid);
