@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 
 // ReSharper disable IdentifierTypo
 
@@ -82,9 +83,9 @@ namespace EpiSource.Unblocker.Hosting {
                         
                         CreateNoWindow = true,
                         UseShellExecute = false,
-                        WorkingDirectory = typeof(WorkerServerHost).Assembly.Location + @"\..",
+                        WorkingDirectory = Application.ExecutablePath + @"\..",
                         Arguments = string.Format(CultureInfo.InvariantCulture,
-                            "/LogFile= /notransaction /ipcguid={0} /parentpid={1} /debug={2} {3}",
+                            "/LogFile= /LogToConsole=true /installtype=notransaction /ipcguid={0} /parentpid={1} /debug={2} {3}",
                             ipcguid, Process.GetCurrentProcess().Id, debug, typeof(WorkerServerHost).Assembly.Location),
                         RedirectStandardOutput = true,
                         RedirectStandardError = true
