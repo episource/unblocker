@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq.Expressions;
 using System.Security;
 using System.Threading;
@@ -24,12 +25,17 @@ namespace EpiSource.Unblocker {
         private readonly DebugMode debugMode;
         private readonly CountdownTask standbyTask;
         private readonly TimeSpan defaultCancellationTimeout;
+        
+        #if !useInstallUtil
+        private readonly BootstrapAssemblyProvider bootstrapAssemblyProvider;
+        #endif
 
         private volatile bool disposed;
 
         public UnblockerHost(
             int maxIdleWorkers = 1, int? maxWorkers = null, TimeSpan? standbyDelay = null,
-            TimeSpan? defaultCancellationTimeout = null, DebugMode debug = DebugMode.None
+            TimeSpan? defaultCancellationTimeout = null, DebugMode debug = DebugMode.None,
+            string dynamicBootstrapperLocation = null /* null: use default (temp) */
         ) {
             this.id = "[unblocker:" + this.GetHashCode() + "]";
             this.waitForWorkerSemaphore = new SemaphoreSlim(
@@ -42,6 +48,10 @@ namespace EpiSource.Unblocker {
 
             this.defaultCancellationTimeout =
                 defaultCancellationTimeout.GetValueOrDefault(builtinDefaultCancellationTimeout);
+            
+            #if !useInstallUtil
+            this.bootstrapAssemblyProvider = new BootstrapAssemblyProvider(dynamicBootstrapperLocation);
+            #endif
         }
         
         #region InvokeAsync
@@ -272,7 +282,7 @@ namespace EpiSource.Unblocker {
             await this.waitForWorkerSemaphore.WaitAsync(ct);
             
             #if !useInstallUtil
-            await BootstrapAssemblyProvider.Instance.EnsureAvailableAsync();
+            await bootstrapAssemblyProvider.EnsureAvailableAsync();
             #endif
             
             lock (this.stateLock) {
@@ -286,7 +296,13 @@ namespace EpiSource.Unblocker {
                 
                 if (nextClient == null) {
                     try {
-                        nextClient = new WorkerProcess().Start(this.debugMode);
+                        nextClient = 
+                            #if useInstallUtil
+                            new WorkerProcess()
+                            #else
+                            new WorkerProcess(this.bootstrapAssemblyProvider)
+                            #endif
+                                .Start(this.debugMode);
                     } catch {
                         this.waitForWorkerSemaphore.Release();
                         throw;

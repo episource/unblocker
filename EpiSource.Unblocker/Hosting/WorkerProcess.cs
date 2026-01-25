@@ -21,6 +21,16 @@ namespace EpiSource.Unblocker.Hosting {
         private bool disposed;
         private Process process;
         
+        #if !useInstallUtil
+        
+        private readonly BootstrapAssemblyProvider bootstrapAssemblyProvider;
+        
+        public WorkerProcess(BootstrapAssemblyProvider bootstrapAssemblyProvider) {
+            this.bootstrapAssemblyProvider = bootstrapAssemblyProvider;
+        }
+            
+        #endif
+        
         // ReSharper disable once MemberCanBePrivate.Global
         public static EventWaitHandle CreateWaitForProcessReadyHandle(Guid ipcguid) {
             return CreateWaitForProcessReadyHandle(ipcguid.ToString());
@@ -78,7 +88,7 @@ namespace EpiSource.Unblocker.Hosting {
                         #if useInstallUtil
                         FileName = GetInstallUtilLocation(),
                         #else
-                        FileName = BootstrapAssemblyProvider.Instance.EnsureAvailable(),
+                        FileName = this.bootstrapAssemblyProvider.EnsureAvailable(),
                         #endif
                         
                         CreateNoWindow = true,
