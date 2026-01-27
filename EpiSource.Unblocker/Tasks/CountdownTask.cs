@@ -13,10 +13,6 @@ namespace EpiSource.Unblocker.Tasks {
             : this(countdown, ct => action()) { }
 
         public CountdownTask(TimeSpan countdown, Action<CancellationToken> action) {
-            if (countdown == null) {
-                throw new ArgumentNullException("countdown");
-            }
-
             if (action == null) {
                 throw new ArgumentNullException("action");
             }

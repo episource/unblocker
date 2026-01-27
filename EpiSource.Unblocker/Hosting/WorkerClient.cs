@@ -38,7 +38,7 @@ namespace EpiSource.Unblocker.Hosting {
         private TaskCompletionSource<InvocationResult<object, object>> activeTcs;
         private CancellationTokenRegistration activeCancellationRegistration;
 
-        public WorkerClient(WorkerProcess process, IWorkerServer serverProxy) {
+        private WorkerClient(WorkerProcess process, IWorkerServer serverProxy) {
             this.process = process;
             this.id = "[client:" + process.Id + "]";
             
@@ -54,6 +54,15 @@ namespace EpiSource.Unblocker.Hosting {
             this.serverProxy.TaskFailedEvent += this.OnRemoteTaskFailed;
             this.serverProxy.TaskCanceledEvent += this.OnRemoteTaskCanceled;
             this.serverProxy.TaskSucceededEvent += this.OnRemoteTaskSucceeded;
+        }
+
+        public static async Task<WorkerClient> StartAsync(
+            CancellationToken ct = default(CancellationToken), BootstrapAssemblyProvider bootstrapAssemblyProvider = null,
+            DebugMode debug = DebugMode.None
+        ) {
+            var process = await WorkerProcess.StartAsync(ct, bootstrapAssemblyProvider, debug);
+            var server = WorkerServerClientSideProxy.ConnectToWorkerServer(process.Ipcguid);
+            return new WorkerClient(process, server);
         }
 
         // Important: don't raise when holding the state lock!

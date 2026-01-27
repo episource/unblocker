@@ -16,7 +16,7 @@ namespace EpiSource.Unblocker {
         private static readonly TimeSpan defaultStandbyDelay = TimeSpan.FromMilliseconds(10000);
         private static readonly TimeSpan builtinDefaultCancellationTimeout = TimeSpan.FromMilliseconds(50);
 
-        private readonly object stateLock = new object();
+        private readonly AsyncLock stateLock = new AsyncLock();
         private readonly Queue<WorkerClient> idleClients = new Queue<WorkerClient>();
         private readonly LinkedList<WorkerClient> busyClients = new LinkedList<WorkerClient>();
         private readonly string id;
@@ -26,16 +26,14 @@ namespace EpiSource.Unblocker {
         private readonly CountdownTask standbyTask;
         private readonly TimeSpan defaultCancellationTimeout;
         
-        #if !useInstallUtil
         private readonly BootstrapAssemblyProvider bootstrapAssemblyProvider;
-        #endif
 
         private volatile bool disposed;
 
         public UnblockerHost(
             int maxIdleWorkers = 1, int? maxWorkers = null, TimeSpan? standbyDelay = null,
             TimeSpan? defaultCancellationTimeout = null, DebugMode debug = DebugMode.None,
-            string dynamicBootstrapperLocation = null /* null: use default (temp) */
+            bool useInstallUtil = false, string dynamicBootstrapperLocation = null /* null: use default (temp) */
         ) {
             this.id = "[unblocker:" + this.GetHashCode() + "]";
             this.waitForWorkerSemaphore = new SemaphoreSlim(
@@ -49,9 +47,7 @@ namespace EpiSource.Unblocker {
             this.defaultCancellationTimeout =
                 defaultCancellationTimeout.GetValueOrDefault(builtinDefaultCancellationTimeout);
             
-            #if !useInstallUtil
-            this.bootstrapAssemblyProvider = new BootstrapAssemblyProvider(dynamicBootstrapperLocation);
-            #endif
+            this.bootstrapAssemblyProvider = useInstallUtil ? null : new BootstrapAssemblyProvider(dynamicBootstrapperLocation);
         }
         
         #region InvokeAsync
@@ -255,8 +251,8 @@ namespace EpiSource.Unblocker {
                     "{0} Standby started.", this.id));
             }
             
-            lock (this.stateLock) {
-                this.RecoverWorkers();
+            using (this.stateLock.Lock()) {
+                this.RecoverWorkersAssumeStateLocked();
                 
                 foreach (var client in this.idleClients) {
                     client.Dispose();
@@ -284,40 +280,47 @@ namespace EpiSource.Unblocker {
             #if !useInstallUtil
             await bootstrapAssemblyProvider.EnsureAvailableAsync();
             #endif
-            
-            lock (this.stateLock) {
-                this.RecoverWorkers();
 
-                WorkerClient nextClient = null;
+            WorkerClient nextClient = null;
+            bool newClient = false;
+            
+            using (await this.stateLock.LockAsync(ct)) {
+                this.RecoverWorkersAssumeStateLocked();
 
                 while (nextClient == null && this.idleClients.Count > 0) {
                     nextClient = this.idleClients.Dequeue().EnsureAlive();
                 }
-                
+
                 if (nextClient == null) {
+                    newClient = true;
+                    
                     try {
-                        nextClient = 
-                            #if useInstallUtil
-                            new WorkerProcess()
-                            #else
-                            new WorkerProcess(this.bootstrapAssemblyProvider)
-                            #endif
-                                .Start(this.debugMode);
+                        nextClient = await WorkerClient.StartAsync(ct, this.bootstrapAssemblyProvider, this.debugMode);
                     } catch {
                         this.waitForWorkerSemaphore.Release();
                         throw;
                     }
-                    
+                }
+            
+                // Important: EnsureAlive before registering CurrentStateChangedEvent handler - possible dead lock!
+                nextClient = nextClient.EnsureAlive();
+                if (nextClient == null) {
+                    this.waitForWorkerSemaphore.Release();
+                    throw new InvalidOperationException("New worker client process just died unexpectedly.");
+                }
+
+                if (newClient) {
                     nextClient.CurrentStateChangedEvent += this.OnWorkerCurrentStateChanged;
                 }
+                
                 this.busyClients.AddLast(nextClient);
-
-                this.EnsureIdleWorkerLimit();
+                this.EnsureIdleWorkerLimitAssumeStateLocked();
                 
                 if (this.debugMode != DebugMode.None) {
                     Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
                         "{0} Successfully retrieved worker {1}", this.id, nextClient));
                 }
+                
                 return nextClient;
             }
         }
@@ -353,83 +356,81 @@ namespace EpiSource.Unblocker {
                     "{0} Cleanup started.", this.id));
             }
             
-            lock (this.stateLock) {
-                this.standbyTask.Reset();
-                this.RecoverWorkers();
-                this.EnsureIdleWorkerLimit();
+            using (this.stateLock.Lock()) {
+                this.RecoverWorkersAssumeStateLocked();
+                this.EnsureIdleWorkerLimitAssumeStateLocked();
             }
+            this.standbyTask.Reset();
         }
 
-        private void RecoverWorkers() {
-            lock (this.stateLock) {
-                var recoveredWorkerCount = 0;
-                var curNode = this.busyClients.First;
+        private void RecoverWorkersAssumeStateLocked() {
+            var recoveredWorkerCount = 0;
+            var curNode = this.busyClients.First;
 
-                try {
-                    while (curNode != null) {
-                        var nextNode = curNode.Next;
-                        var worker = curNode.Value;
-                        
-                        worker.EnsureAlive();
-
-                        switch (worker.CurrentState) {
-                            case WorkerClient.State.Idle:
-                                recoveredWorkerCount++;
-
-                                this.busyClients.Remove(curNode);
-                                this.idleClients.Enqueue(worker);
-
-                                break;
-                            case WorkerClient.State.Busy:
-                            case WorkerClient.State.Cleanup:
-                                break;
-                            case WorkerClient.State.Dead:
-                                recoveredWorkerCount++;
-
-                                if (this.debugMode != DebugMode.None) {
-                                    Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                                        "{0} Disposing dead worker: {1}", this.id, worker));
-                                }
-
-                                this.busyClients.Remove(curNode);
-
-                                worker.CurrentStateChangedEvent -= this.OnWorkerCurrentStateChanged;
-                                worker.Dispose();
-                                break;
-                            default:
-                                throw new InvalidOperationException("Unexpected worker state.");
-                        }
-
-                        curNode = nextNode;
-                    }
-                } finally {
-                    if (recoveredWorkerCount > 0) {
-                        this.waitForWorkerSemaphore.Release(recoveredWorkerCount);
-                    }
-                }
-            }
-        }
-
-        private void EnsureIdleWorkerLimit() {
-            lock (this.stateLock) {
-                while (this.idleClients.Count > this.maxIdleWorkers) {
-                    var worker = this.idleClients.Dequeue();
+            try {
+                while (curNode != null) {
+                    var nextNode = curNode.Next;
+                    var worker = curNode.Value;
                     
-                    if (this.debugMode != DebugMode.None) {
-                        Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                            "{0} Disposing surplus worker: {1}", this.id, worker));
+                    worker.EnsureAlive();
+
+                    switch (worker.CurrentState) {
+                        case WorkerClient.State.Idle:
+                            recoveredWorkerCount++;
+
+                            this.busyClients.Remove(curNode);
+                            this.idleClients.Enqueue(worker);
+
+                            break;
+                        case WorkerClient.State.Busy:
+                        case WorkerClient.State.Cleanup:
+                            break;
+                        case WorkerClient.State.Dead:
+                            recoveredWorkerCount++;
+
+                            if (this.debugMode != DebugMode.None) {
+                                Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                                    "{0} Disposing dead worker: {1}", this.id, worker));
+                            }
+
+                            this.busyClients.Remove(curNode);
+
+                            worker.CurrentStateChangedEvent -= this.OnWorkerCurrentStateChanged;
+                            worker.Dispose();
+                            break;
+                        default:
+                            throw new InvalidOperationException("Unexpected worker state.");
                     }
 
-                    worker.CurrentStateChangedEvent -= this.OnWorkerCurrentStateChanged;
-                    worker.Dispose();
+                    curNode = nextNode;
                 }
+            } finally {
+                if (recoveredWorkerCount > 0) {
+                    this.waitForWorkerSemaphore.Release(recoveredWorkerCount);
+                }
+            }
+        }
+
+        private void EnsureIdleWorkerLimitAssumeStateLocked() {
+            while (this.idleClients.Count > this.maxIdleWorkers) {
+                var worker = this.idleClients.Dequeue();
+                
+                if (this.debugMode != DebugMode.None) {
+                    Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0} Disposing surplus worker: {1}", this.id, worker));
+                }
+
+                worker.CurrentStateChangedEvent -= this.OnWorkerCurrentStateChanged;
+                worker.Dispose();
             }
         }
         
         #region IDisposable
 
         public void Dispose() {
-            this.Dispose(true);
+            using (this.stateLock.Lock()) {
+                this.Dispose(true);
+            }
         }
 
         private /*protected virtual*/ void Dispose(bool disposing) {
@@ -438,19 +439,17 @@ namespace EpiSource.Unblocker {
                 
                 AppDomain.CurrentDomain.ProcessExit -= this.OnParentProcessExit;
                 
-                lock (this.stateLock) {
-                    foreach (var client in this.idleClients) {
-                        client.CurrentStateChangedEvent -= this.OnWorkerCurrentStateChanged;
-                        client.Dispose();
-                    }
-                    this.idleClients.Clear();
-
-                    foreach (var client in this.busyClients) {
-                        client.CurrentStateChangedEvent -= this.OnWorkerCurrentStateChanged;
-                        client.Dispose();
-                    }
-                    this.busyClients.Clear();
+                foreach (var client in this.idleClients) {
+                    client.CurrentStateChangedEvent -= this.OnWorkerCurrentStateChanged;
+                    client.Dispose();
                 }
+                this.idleClients.Clear();
+
+                foreach (var client in this.busyClients) {
+                    client.CurrentStateChangedEvent -= this.OnWorkerCurrentStateChanged;
+                    client.Dispose();
+                }
+                this.busyClients.Clear();
             }
         }
         
