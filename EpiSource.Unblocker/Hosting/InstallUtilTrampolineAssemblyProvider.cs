@@ -5,14 +5,15 @@ using System.Linq.Expressions;
 using System.Reflection;
 
 namespace EpiSource.Unblocker.Hosting {
-    public sealed class BootstrapAssemblyProvider : AssemblyProvider {
+    public sealed class InstallUtilTrampolineAssemblyProvider : AssemblyProvider {
         
-        private static readonly IReadOnlyList<string> assemblyDependencies = new List<string> { typeof(WorkerServerHost).Assembly.Location }.AsReadOnly();
-        private static readonly string mainClass = "EpiSource.Unblocker.Hosting.Bootstrapper";
+        private static readonly IReadOnlyList<string> assemblyDependencies = 
+            new List<string> { typeof(WorkerServerHost).Assembly.Location, "System.Configuration.Install.dll" }.AsReadOnly();
 
+        
         private string assemblyPath = null;
 
-        public BootstrapAssemblyProvider(string dynamicBootstrapperLocation)
+        public InstallUtilTrampolineAssemblyProvider(string dynamicBootstrapperLocation)
             : base(dynamicBootstrapperLocation) { }
 
         protected override string EnsureAvailableInternal() {
@@ -53,7 +54,7 @@ namespace EpiSource.Unblocker.Hosting {
         // side-by-side: bootstrapper must be installed into the same directory as the host assembly
         protected static AssemblySource CreateSideBySideBootstrapper() {
             var assemblyName = String.Format("{0}-{1}-SxS", formatUnblockerTitle(), typeof(WorkerServerHost).Assembly.GetName().Version);
-            return new AssemblySource(createSourceTemplate(""), assemblyName, assemblyDependencies, mainClass);
+            return new AssemblySource(createSourceTemplate(""), assemblyName, assemblyDependencies);
         }
 
         // bootrapper that can be installed anywhere, but is bound to the location
@@ -62,7 +63,7 @@ namespace EpiSource.Unblocker.Hosting {
             var hostAssembly = typeof(WorkerServerHost).Assembly;
             var hostAssemblyResolver = @"
 
-        static Bootstrapper() {
+        static InstallUtilTrampoline() {
             AppDomain.CurrentDomain.AssemblyResolve += (s, e) => {
                 if (e.Name == @""" + hostAssembly.FullName + @""") {
                     return Assembly.LoadFile(@""" + hostAssembly.Location + @""");
@@ -74,14 +75,14 @@ namespace EpiSource.Unblocker.Hosting {
 
 ";
             var assemblyName = String.Format("{0}-{1}", formatUnblockerTitle(), typeof(WorkerServerHost).Assembly.GetName().Version);
-            return new AssemblySource(createSourceTemplate(hostAssemblyResolver), assemblyName, assemblyDependencies, mainClass);
+            return new AssemblySource(createSourceTemplate(hostAssemblyResolver), assemblyName, assemblyDependencies);
 
         }
 
         private static string formatUnblockerTitle() {
             var hostAssembly = typeof(WorkerServerHost).Assembly;
             
-            var unblockerTitle = "EpiSource.Unblocker.Bootstrap";
+            var unblockerTitle = "EpiSource.Unblocker.InstallUtilTrampoline";
             if (hostAssembly.GetName().Name != "EpiSource.Unblocker") {
                 unblockerTitle += "@" + hostAssembly.GetName().Name;
             }
@@ -102,11 +103,13 @@ namespace EpiSource.Unblocker.Hosting {
 
             return @"
 using System;
+using System.Collections;
+using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
 [assembly: AssemblyTitle(""" + unblockerTitle + @""")]
-[assembly: AssemblyDescription(""Dynamically created worker process entrypoint for EpiSource.Unblocker."")]
+[assembly: AssemblyDescription(""Dynamically created .Net InstallUtil entrypoint for EpiSource.Unblocker."")]
 [assembly: AssemblyConfiguration(""{hash}"")]
 [assembly: AssemblyCompany(""EpiSource"")]
 [assembly: AssemblyProduct(""EpiSource.Unblocker"")]
@@ -120,10 +123,11 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyInformationalVersion(""" + unblockerVersion + @"+{hash}"")]
 
 namespace EpiSource.Unblocker.Hosting {
-" + additionalCode + @"
-    public static class Bootstrapper {
-        public static void Main(string[] args) {
-            " + hostClassName + "." + hostStartName + @"(args);
+    [RunInstaller(true)]
+    public sealed class InstallUtilTrampoline : System.Configuration.Install.Installer {
+        " + additionalCode + @"
+        public override void Install(IDictionary stateSaver) {
+            " + hostClassName + "." + hostStartName + @"(this.Context.Parameters);
         }
     }
 }";

@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EpiSource.Unblocker", "EpiSource.Unblocker\EpiSource.Unblocker.csproj", "{2569331C-8AE0-430B-A4BB-D69877DC8900}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestApp", "TestApp\TestApp.csproj", "{8FF7283A-36A6-4B2E-AC6F-C1206C8B5D6A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{2569331C-8AE0-430B-A4BB-D69877DC8900}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2569331C-8AE0-430B-A4BB-D69877DC8900}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2569331C-8AE0-430B-A4BB-D69877DC8900}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8FF7283A-36A6-4B2E-AC6F-C1206C8B5D6A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8FF7283A-36A6-4B2E-AC6F-C1206C8B5D6A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8FF7283A-36A6-4B2E-AC6F-C1206C8B5D6A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8FF7283A-36A6-4B2E-AC6F-C1206C8B5D6A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

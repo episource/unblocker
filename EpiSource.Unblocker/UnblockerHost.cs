@@ -26,14 +26,15 @@ namespace EpiSource.Unblocker {
         private readonly CountdownTask standbyTask;
         private readonly TimeSpan defaultCancellationTimeout;
         
-        private readonly BootstrapAssemblyProvider bootstrapAssemblyProvider;
+        private readonly AssemblyProvider bootstrapAssemblyProvider;
 
         private volatile bool disposed;
 
         public UnblockerHost(
             int maxIdleWorkers = 1, int? maxWorkers = null, TimeSpan? standbyDelay = null,
             TimeSpan? defaultCancellationTimeout = null, DebugMode debug = DebugMode.None,
-            bool useInstallUtil = false, string dynamicBootstrapperLocation = null /* null: use default (temp) */
+            BootstrapMode bootstrapMode = BootstrapMode.CustomBootstrapper,
+            string dynamicBootstrapperLocation = null /* null: use default (temp) */
         ) {
             this.id = "[unblocker:" + this.GetHashCode() + "]";
             this.waitForWorkerSemaphore = new SemaphoreSlim(
@@ -46,8 +47,18 @@ namespace EpiSource.Unblocker {
 
             this.defaultCancellationTimeout =
                 defaultCancellationTimeout.GetValueOrDefault(builtinDefaultCancellationTimeout);
-            
-            this.bootstrapAssemblyProvider = useInstallUtil ? null : new BootstrapAssemblyProvider(dynamicBootstrapperLocation);
+
+            switch (bootstrapMode) {
+                case BootstrapMode.CustomBootstrapper:
+                    this.bootstrapAssemblyProvider = new BootstrapAssemblyProvider(dynamicBootstrapperLocation);
+                    break;
+                case BootstrapMode.InstallUtilTrampoline:
+                    this.bootstrapAssemblyProvider = new InstallUtilTrampolineAssemblyProvider(dynamicBootstrapperLocation);
+                    break;
+                default:
+                    this.bootstrapAssemblyProvider = null;
+                    break;
+            }
         }
         
         #region InvokeAsync
@@ -276,10 +287,6 @@ namespace EpiSource.Unblocker {
             }
             
             await this.waitForWorkerSemaphore.WaitAsync(ct);
-            
-            #if !useInstallUtil
-            await bootstrapAssemblyProvider.EnsureAvailableAsync();
-            #endif
 
             WorkerClient nextClient = null;
             bool newClient = false;

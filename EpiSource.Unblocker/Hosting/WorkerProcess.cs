@@ -1,14 +1,14 @@
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 
 using EpiSource.Unblocker.Util;
 
@@ -40,23 +40,32 @@ namespace EpiSource.Unblocker.Hosting {
         }
         
         public static async Task<WorkerProcess> StartAsync(
-                CancellationToken ct = default(CancellationToken), BootstrapAssemblyProvider bootstrapAssemblyProvider = null,
+                CancellationToken ct = default(CancellationToken), AssemblyProvider assemblyProvider = null,
                 DebugMode debug = DebugMode.None
             ) {
             var ipcguid = Guid.NewGuid();
             var redirectConsole = debug != DebugMode.None;
             var startupConsoleOutputBuffer = new StringBuilder();
             DataReceivedEventHandler startupConsoleOutputHandler = (s, e) => startupConsoleOutputBuffer.AppendLine(e.Data);
-            
+
+            var installUtil = assemblyProvider  == null || assemblyProvider is InstallUtilTrampolineAssemblyProvider;
+            var assemblyPath = assemblyProvider != null ? await assemblyProvider.EnsureAvailableAsync() : null;
+            var exePath = installUtil ? GetInstallUtilLocation() : assemblyPath;
+
+            if (installUtil && assemblyPath == null &&
+                !typeof(WorkerServerHost).GetInterfaces().Select(i => i.Name == "System.Configuration.Install.Installer").FirstOrDefault()) {
+                throw new NotSupportedException("WorkerServerHost does not implement Installer interface. Not compiled with `useInstallUtil` flag?");
+            }
+
             var process = new Process {
                 StartInfo = {
-                    FileName = bootstrapAssemblyProvider != null ? await bootstrapAssemblyProvider.EnsureAvailableAsync() :  GetInstallUtilLocation(),
+                    FileName = exePath,
                     CreateNoWindow = true,
                     UseShellExecute = false,
-                    WorkingDirectory = Application.ExecutablePath + @"\..",
+                    WorkingDirectory = Path.GetDirectoryName((Assembly.GetEntryAssembly() ?? typeof(UnblockerHost).Assembly).Location),
                     Arguments = string.Format(CultureInfo.InvariantCulture,
                         "/LogFile= /LogToConsole=true /InstallType=NoTransaction /ipcguid={0} /parentpid={1} /debug={2} {3}",
-                        ipcguid, Process.GetCurrentProcess().Id, debug, typeof(WorkerServerHost).Assembly.Location),
+                        ipcguid, Process.GetCurrentProcess().Id, debug, installUtil ? assemblyPath ?? typeof(WorkerServerHost).Assembly.Location : ""),
                     RedirectStandardOutput = true,
                     RedirectStandardError = true
                 },

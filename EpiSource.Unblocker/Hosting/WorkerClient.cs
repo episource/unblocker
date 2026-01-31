@@ -57,7 +57,7 @@ namespace EpiSource.Unblocker.Hosting {
         }
 
         public static async Task<WorkerClient> StartAsync(
-            CancellationToken ct = default(CancellationToken), BootstrapAssemblyProvider bootstrapAssemblyProvider = null,
+            CancellationToken ct = default(CancellationToken), AssemblyProvider bootstrapAssemblyProvider = null,
             DebugMode debug = DebugMode.None
         ) {
             var process = await WorkerProcess.StartAsync(ct, bootstrapAssemblyProvider, debug);

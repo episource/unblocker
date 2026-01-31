@@ -36,28 +36,33 @@ namespace EpiSource.Unblocker.Hosting {
             Start(argsDict);
         }
         
-        private static void Start(StringDictionary args) {
-            if (!args.ContainsKey("debug")) {
+        public static void Start(StringDictionary args) {
+            var normalizedArgs = new Dictionary<string, string>(args.Count);
+            foreach (var key in args.Keys) {
+                normalizedArgs[key.ToString().ToLowerInvariant()] = args[key.ToString()];
+            }
+            
+            if (!normalizedArgs.ContainsKey("debug")) {
                 throw new ArgumentException("Missing argument `debug`.");
             }
-            if (!args.ContainsKey("ipcguid")) {
+            if (!normalizedArgs.ContainsKey("ipcguid")) {
                 throw new ArgumentException("Missing argument `ipcguid`.");
             }
-            if (!args.ContainsKey("parentpid")) {
+            if (!normalizedArgs.ContainsKey("parentpid")) {
                 throw new ArgumentException("Missing argument `parentpid`.");
             }
             
             DebugMode debugMode;
-            if (!DebugMode.TryParse(args["debug"], out debugMode)) {
-                throw new ArgumentException("Invalid value of `debug`: " + args["debug"]);
+            if (!DebugMode.TryParse(normalizedArgs["debug"], out debugMode)) {
+                throw new ArgumentException("Invalid value of `debug`: " + normalizedArgs["debug"]);
             }
 
             int parentPid;
-            if (!int.TryParse(args["parentpid"], out parentPid)) {
-                throw new ArgumentException("Invalid value of `parentpid`: " + args["parentpid"]);
+            if (!int.TryParse(normalizedArgs["parentpid"], out parentPid)) {
+                throw new ArgumentException("Invalid value of `parentpid`: " + normalizedArgs["parentpid"]);
             }
             
-            Start(debugMode, args["ipcguid"], parentPid);
+            Start(debugMode, normalizedArgs["ipcguid"], parentPid);
         }
 
         private static void Start(DebugMode debugMode, string ipcGuidString, int parentPid) {

@@ -26,17 +26,19 @@ namespace EpiSource.Unblocker.Hosting {
             public readonly string SourceHash;
             public readonly string Source;
             public readonly bool IsExecutable;
+            public readonly string MainClass;
             public readonly string AssemblyName;
             public readonly IReadOnlyList<string> Dependencies;
 
-            public AssemblySource(string source, string assemblyBaseName, bool isExecutable, IReadOnlyList<string> dependencies) {
+            public AssemblySource(string source, string assemblyBaseName, IReadOnlyList<string> dependencies, string mainClassIfExecutable = null) {
                 var sourceHash = BobJenkinsOneAtATimeHash.CalculateHash(source);
                 this.SourceHash = String.Format("0x{0:x8}", sourceHash);
 
                 this.Source = source.Replace("{hash}", this.SourceHash);
 
-                this.IsExecutable = isExecutable;
-                this.AssemblyName = assemblyBaseName + "-" + this.SourceHash + (isExecutable ? ".exe" : ".dll");
+                this.MainClass = mainClassIfExecutable;
+                this.IsExecutable = mainClassIfExecutable != null;
+                this.AssemblyName = assemblyBaseName + "-" + this.SourceHash + (this.IsExecutable ? ".exe" : ".dll");
                 this.Dependencies = new [] {
                     "System.dll"
                 }.Concat(dependencies).ToList().AsReadOnly();
@@ -49,11 +51,14 @@ namespace EpiSource.Unblocker.Hosting {
                     OutputAssembly = Path.Combine(outputDirectoryPath, this.AssemblyName),
                     GenerateInMemory = false,
                     GenerateExecutable = this.IsExecutable,
-                    MainClass = "EpiSource.Unblocker.Hosting.Bootstrapper"
                 };
                 foreach (var dependency in this.Dependencies) {
                     opts.ReferencedAssemblies.Add(dependency);
                 }
+                if (this.MainClass != null) {
+                    opts.MainClass = this.MainClass;
+                }
+                
 
                 var result = provider.CompileAssemblyFromSource(opts, this.Source);
                 if (result.NativeCompilerReturnValue == 0) return result.PathToAssembly;

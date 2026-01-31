@@ -41,11 +41,18 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Hosting\BootstrapAssemblyProvider.cs" />
+    <Compile Include="Hosting\AssemblyProvider.cs" />
+    <Compile Include="Hosting\BootstrapAssemblyProvider.cs">
+      <DependentUpon>AssemblyProvider.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Hosting\BootstrapMode.cs" />
     <Compile Include="Hosting\DeniedByVirusScannerFalsePositive.cs" />
     <Compile Include="Hosting\ForcedCancellationMode.cs" />
     <Compile Include="Hosting\HostingExtensions.cs" />
     <Compile Include="Hosting\DebugMode.cs" />
+    <Compile Include="Hosting\InstallUtilTrampolineAssemblyProvider.cs">
+      <DependentUpon>AssemblyProvider.cs</DependentUpon>
+    </Compile>
     <Compile Include="Hosting\InvocationHandle.cs" />
     <Compile Include="Hosting\PortableInvocationRequest.cs" />
     <Compile Include="Hosting\PortableInvocationRequest.types.cs">
@@ -68,6 +75,8 @@
     <Compile Include="Tasks\TaskExtensions.cs" />
     <Compile Include="Tasks\TaskLike.cs" />
     <Compile Include="UnblockerHost.cs" />
+    <Compile Include="Util\AsyncLock.cs" />
+    <Compile Include="Util\AsyncWaitHandle.cs" />
     <Compile Include="Util\BobJenkinsHash.cs" />
     <Compile Include="Util\SerializationExtensions.cs" />
     <Compile Include="Util\StringExtensions.cs" />
