@@ -12,8 +12,8 @@ namespace EpiSource.Unblocker.Hosting {
 
         private string assemblyPath = null;
 
-        public BootstrapAssemblyProvider(string dynamicBootstrapperLocation)
-            : base(dynamicBootstrapperLocation) { }
+        public BootstrapAssemblyProvider(string dynamicBootstrapperLocation, bool noSideBySide=false)
+            : base(dynamicBootstrapperLocation, noSideBySide) { }
 
         protected override string EnsureAvailableInternal() {
             if (this.assemblyPath != null && File.Exists(this.assemblyPath)) {
@@ -28,7 +28,7 @@ namespace EpiSource.Unblocker.Hosting {
             var boundSource = CreateBoundBootstrapper();
             var boundPath = Path.Combine(this.dynamicAssemblyLocation, boundSource.AssemblyName);
 
-            if (File.Exists(sideBySidePath)) {
+            if (!this.noSideBySide && File.Exists(sideBySidePath)) {
                 this.assemblyPath = sideBySidePath;
                 return this.assemblyPath;
             }
@@ -37,15 +37,17 @@ namespace EpiSource.Unblocker.Hosting {
                 return this.assemblyPath;
             }
 
-            try {
-                File.Create(sideBySidePath, 1, FileOptions.DeleteOnClose).Dispose();
-                
-                this.assemblyPath = sideBySideSource.Compile(Path.GetDirectoryName(sideBySidePath));
-                return this.assemblyPath;
-            } catch (UnauthorizedAccessException) {
-                // continue
+            if (!this.noSideBySide) {
+                try {
+                    File.Create(sideBySidePath, 1, FileOptions.DeleteOnClose).Dispose();
+
+                    this.assemblyPath = sideBySideSource.Compile(Path.GetDirectoryName(sideBySidePath));
+                    return this.assemblyPath;
+                } catch (UnauthorizedAccessException) {
+                    // continue
+                }
             }
-            
+
             this.assemblyPath = boundSource.Compile(this.dynamicAssemblyLocation);
             return this.assemblyPath;
         }

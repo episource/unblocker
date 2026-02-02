@@ -95,9 +95,11 @@ namespace EpiSource.Unblocker.Hosting {
 
         private readonly SemaphoreSlim semaphoreOneAtATime = new SemaphoreSlim(1, 1);
         protected readonly string dynamicAssemblyLocation;
+        protected readonly bool noSideBySide;
 
-        protected AssemblyProvider(string dynamicAssemblyLocation) {
+        protected AssemblyProvider(string dynamicAssemblyLocation, bool noSideBySide) {
             this.dynamicAssemblyLocation = dynamicAssemblyLocation ?? Path.GetTempPath();
+            this.noSideBySide = noSideBySide;
         }
 
         public async Task<string> EnsureAvailableAsync() {

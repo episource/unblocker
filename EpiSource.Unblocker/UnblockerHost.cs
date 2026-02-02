@@ -50,10 +50,16 @@ namespace EpiSource.Unblocker {
 
             switch (bootstrapMode) {
                 case BootstrapMode.CustomBootstrapper:
-                    this.bootstrapAssemblyProvider = new BootstrapAssemblyProvider(dynamicBootstrapperLocation);
+                    this.bootstrapAssemblyProvider = new BootstrapAssemblyProvider(dynamicBootstrapperLocation, false);
+                    break;
+                case BootstrapMode.CustomBootstrapperNoSideBySide:
+                    this.bootstrapAssemblyProvider = new BootstrapAssemblyProvider(dynamicBootstrapperLocation, true);
                     break;
                 case BootstrapMode.InstallUtilTrampoline:
-                    this.bootstrapAssemblyProvider = new InstallUtilTrampolineAssemblyProvider(dynamicBootstrapperLocation);
+                    this.bootstrapAssemblyProvider = new InstallUtilTrampolineAssemblyProvider(dynamicBootstrapperLocation, false);
+                    break;
+                case BootstrapMode.InstallUtilTrampolineNoSideBySide:
+                    this.bootstrapAssemblyProvider = new InstallUtilTrampolineAssemblyProvider(dynamicBootstrapperLocation, true);
                     break;
                 default:
                     this.bootstrapAssemblyProvider = null;
