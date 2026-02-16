@@ -109,6 +109,13 @@ Trace.Assert(j.Counter == 0);
 Trace.Assert(result.Result == 1);
 Trace.Assert(result.PostInvocationTarget.Counter == 1);
 ```
+## Bootstrapping
+A isolated child process is used to run the invocation requests. There are several ways to create this process. The selection is done using the `UnblockerHost:bootstrapMode` constructor argument. Refer to [BootstrapMode](./EpiSource.Unblocker/Hosting/BootstrapMode.cs) enum for details.
+
+Some modes might interfere with threat protection systems. There are three principal mechanisms:
+ * (default) `Custom Bootstrapper`: A dynamic executable is created that references the unblocker Dll.
+ * `Install Util with Trampoline`: The [.Net framework provided InstallUtil](https://learn.microsoft.com/en-us/dotnet/framework/tools/installutil-exe-installer-tool) is used to load the Unblocker implementation from its assembly. A small trampoline assembly is compiled dynamically to load all necessary dependencies.
+ * `Plain Install Util`: The [.Net framework provided InstallUtil](https://learn.microsoft.com/en-us/dotnet/framework/tools/installutil-exe-installer-tool) is used without dynamic trampoline assembly. For this to work, all dependencies of the assembly containing the unblocker must be located in the same directory as the unblocker assembly or in the GAC. This is the case if the "standard" unblocker assembly as produced by this MSBuild project is used. This might be different if the unblocker is embedded in an third-party application (like [Keepass-SmartcardEncryptedKeyFile Plugin](https://github.com/episource/Keepass-SmartcardEncryptedKeyFile)).
 
 ## Debugging
 There are two builtin options to debug tasks run by the unblocker:
