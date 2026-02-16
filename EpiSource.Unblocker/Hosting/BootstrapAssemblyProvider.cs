@@ -7,7 +7,12 @@ using System.Reflection;
 namespace EpiSource.Unblocker.Hosting {
     public sealed class BootstrapAssemblyProvider : AssemblyProvider {
         
-        private static readonly IReadOnlyList<string> assemblyDependencies = new List<string> { typeof(WorkerServerHost).Assembly.Location }.AsReadOnly();
+        private static readonly IReadOnlyList<string> assemblyDependencies = new List<string> {
+            typeof(WorkerServerHost).Assembly.Location
+            #if !noBootstrapModeInstallUtilPlain
+            , "System.Configuration.Install.dll"
+            #endif
+        }.AsReadOnly();
         private static readonly string mainClass = "EpiSource.Unblocker.Hosting.Bootstrapper";
 
         private string assemblyPath = null;

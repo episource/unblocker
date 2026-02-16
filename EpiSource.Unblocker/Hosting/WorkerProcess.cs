@@ -53,8 +53,8 @@ namespace EpiSource.Unblocker.Hosting {
             var exePath = installUtil ? GetInstallUtilLocation() : assemblyPath;
 
             if (installUtil && assemblyPath == null &&
-                !typeof(WorkerServerHost).GetInterfaces().Select(i => i.Name == "System.Configuration.Install.Installer").FirstOrDefault()) {
-                throw new NotSupportedException("WorkerServerHost does not implement Installer interface. Not compiled with `useInstallUtil` flag?");
+                    !typeof(WorkerServerHost).GetInterfaces().Select(i => i.Name == "System.Configuration.Install.Installer").FirstOrDefault()) {
+                throw new NotSupportedException("WorkerServerHost does not implement Installer interface. Compiled with `noBootstrapModeInstallUtilPlain` flag?");
             }
 
             var process = new Process {
