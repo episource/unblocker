@@ -127,8 +127,8 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyInformationalVersion(""" + unblockerVersion + @"+{hash}"")]
 
 namespace EpiSource.Unblocker.Hosting {
-" + additionalCode + @"
     public static class Bootstrapper {
+        " + additionalCode + @"
         public static void Main(string[] args) {
             " + hostClassName + "." + hostStartName + @"(args);
         }
