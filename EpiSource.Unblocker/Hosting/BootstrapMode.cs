@@ -44,11 +44,13 @@ namespace EpiSource.Unblocker.Hosting {
         /// </summary>
         InstallUtilTrampolineNoSideBySide,
         
+        #if !noBootstrapModeInstallUtilPlain
         /// <summary>
         /// .Net Framework included InstallUtil is used to start the worker server host directly
         /// from the assembly containing the UnblockerHost. This fails if not all necessary dependencies
         /// of this assembly are either located in GAC or in the same directory.
         /// </summary>
         InstallUtilPlain
+        #endif
     }
 }

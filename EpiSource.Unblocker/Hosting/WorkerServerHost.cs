@@ -15,15 +15,15 @@ namespace EpiSource.Unblocker.Hosting {
     /// <summary>This is the entry point of the host process.
     /// To execute a class library the InstallUtil.exe application included with every .net framework installation
     /// is abused.</summary>
-    #if useInstallUtil
+    #if noBootstrapModeInstallUtilPlain
+    public sealed class WorkerServerHost {
+    #else
     [RunInstaller(true)]
     public sealed class WorkerServerHost : System.Configuration.Install.Installer {
     
         public override void Install(IDictionary stateSaver) {
             Start(this.Context.Parameters);
         }
-    #else
-    public sealed class WorkerServerHost {
     #endif
         public static void Start(IEnumerable<string> args) {
             var argsDict = new StringDictionary();
