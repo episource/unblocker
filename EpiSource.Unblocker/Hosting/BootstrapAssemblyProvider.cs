@@ -58,14 +58,14 @@ namespace EpiSource.Unblocker.Hosting {
         }
 
         // side-by-side: bootstrapper must be installed into the same directory as the host assembly
-        protected static AssemblySource CreateSideBySideBootstrapper() {
+        private static AssemblySource CreateSideBySideBootstrapper() {
             var assemblyName = String.Format("{0}-{1}-SxS", formatUnblockerTitle(), typeof(WorkerServerHost).Assembly.GetName().Version);
             return new AssemblySource(createSourceTemplate(""), assemblyName, assemblyDependencies, mainClass);
         }
 
         // bootrapper that can be installed anywhere, but is bound to the location
         // of the host assembly at the time of source creation
-        protected static AssemblySource CreateBoundBootstrapper() {
+        private static AssemblySource CreateBoundBootstrapper() {
             var hostAssembly = typeof(WorkerServerHost).Assembly;
             var hostAssemblyResolver = @"
 
