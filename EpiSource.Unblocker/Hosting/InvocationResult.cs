@@ -69,6 +69,9 @@ namespace EpiSource.Unblocker.Hosting {
 
     public static class InvocationResultExtensions {
         public static InvocationResult<TTarget, TReturn> CastTo<TTarget, TReturn>(this InvocationResult<object, object> invocationResult) {
+            if (invocationResult == null) {
+                return null;
+            }
             return new InvocationResult<TTarget, TReturn>((TTarget)invocationResult.PostInvocationTarget, (TReturn)invocationResult.Result, invocationResult.HasResult);
         }
     }

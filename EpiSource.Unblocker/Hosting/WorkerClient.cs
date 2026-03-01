@@ -186,9 +186,11 @@ namespace EpiSource.Unblocker.Hosting {
                 // starting the task!
                 if (ct.IsCancellationRequested) {
                     this.activeTcs.TrySetCanceled();
+                    var task = this.activeTcs.Task;
                     this.activeTcs = null;
+                    
                     return new InvocationHandle<TTarget, TReturn>(
-                        request, this.activeTcs.Task.TransformResult(r => r.CastTo<TTarget, TReturn>()), this.process.Process, ct, cancellationTimeout, forcedCancellationMode, securityZone);
+                        request, task.TransformResult(r => r.CastTo<TTarget, TReturn>()), this.process.Process, ct, cancellationTimeout, forcedCancellationMode, securityZone);
                 }
                 
                 this.activeCancellationRegistration = ct.Register(() => {

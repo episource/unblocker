@@ -5,7 +5,7 @@ namespace EpiSource.Unblocker.Tasks {
     public static class TaskExtensions {
 
         public static async Task<TOut> TransformResult<TIn, TOut>(this Task<TIn> task, Func<TIn, TOut> transformation) {
-            var input = await task;
+            var input = task == null ? default(TIn) : await task;
             return transformation.Invoke(input);
         }
     }
